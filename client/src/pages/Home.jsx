@@ -1,21 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
 
 function Home() {
-  const navigate = useNavigate()
   const { user: authUser, isAuthenticated } = useAuth()
 
   const [profileData, setProfileData] = useState(null)
   const [musicData, setMusicData] = useState(null)
-  const [loadingDashboard, setLoadingDashboard] = useState(false)
 
   useEffect(() => {
     let isActive = true
 
     if (isAuthenticated) {
-      setLoadingDashboard(true)
       Promise.allSettled([
         api.get('/users/me'),
         api.get('/music'),
@@ -30,7 +27,6 @@ function Home() {
         ) {
           setMusicData(musicRes.value.data.musicProfile)
         }
-        setLoadingDashboard(false)
       })
     } else {
       setProfileData(null)
