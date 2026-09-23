@@ -15,7 +15,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5175',
   process.env.CLIENT_URL,
-  'https://vibematch-2itmk.onrender.com',
+  'https://vibematch-2-itmk.onrender.com',
 ].filter(Boolean)
 
 const io = new Server(server, {
