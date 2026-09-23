@@ -1,7 +1,9 @@
 const express = require('express')
 const cors = require('cors')
+const helmet = require('helmet')
 const path = require('path')
 
+const { corsOptions } = require('./config/cors')
 const authRoutes = require('./routes/auth.routes')
 const userRoutes = require('./routes/user.routes')
 const interactionRoutes = require('./routes/interaction.routes')
@@ -19,7 +21,16 @@ const aiRoutes = require('./routes/ai.routes')
 
 const app = express()
 
-app.use(cors())
+// Production-safe security headers with helmet
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false,
+  }),
+)
+
+// Explicit CORS origin restriction
+app.use(cors(corsOptions))
 app.use(express.json())
 
 // Serve uploaded profile images
@@ -53,6 +64,17 @@ app.get('/api/health', (req, res) => {
     success: true,
     message: 'VibeMatch API is running',
   })
+})
+
+// Clean CORS rejection handler
+app.use((err, req, res, next) => {
+  if (err && err.message === 'CORS origin not allowed') {
+    return res.status(403).json({
+      success: false,
+      message: 'CORS origin not allowed',
+    })
+  }
+  next(err)
 })
 
 module.exports = app

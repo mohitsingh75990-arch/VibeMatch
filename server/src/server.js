@@ -11,12 +11,7 @@ const PORT = process.env.PORT || 5000
 
 const server = http.createServer(app)
 
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5175',
-  process.env.CLIENT_URL,
-  'https://vibematch-2-itmk.onrender.com',
-].filter(Boolean)
+const { allowedOrigins } = require('./config/cors')
 
 const io = new Server(server, {
   cors: {
