@@ -12,8 +12,7 @@ function Navbar() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setUnreadCount(0)
-      return
+      return undefined
     }
 
     const loadUnreadCount = async () => {
@@ -37,6 +36,7 @@ function Navbar() {
 
   const handleLogout = () => {
     setMenuOpen(false)
+    setUnreadCount(0)
     logout()
     navigate('/login')
   }
@@ -49,7 +49,6 @@ function Navbar() {
     <nav className="border-b border-slate-200 bg-white">
       <div className="mx-auto max-w-6xl px-4">
         <div className="flex items-center justify-between py-4">
-          {/* LOGO */}
           <Link
             to="/"
             onClick={closeMenu}
@@ -63,7 +62,6 @@ function Navbar() {
             </span>
           </Link>
 
-          {/* DESKTOP NAV */}
           <div className="hidden items-center gap-4 md:flex">
             {isAuthenticated ? (
               <>
@@ -146,7 +144,6 @@ function Navbar() {
             )}
           </div>
 
-          {/* MOBILE MENU BUTTON */}
           <button
             type="button"
             onClick={() =>
@@ -160,7 +157,6 @@ function Navbar() {
           </button>
         </div>
 
-        {/* MOBILE NAV */}
         {menuOpen && (
           <div className="border-t border-slate-100 py-4 md:hidden">
             {isAuthenticated ? (

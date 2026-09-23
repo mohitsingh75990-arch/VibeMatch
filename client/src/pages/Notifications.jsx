@@ -10,25 +10,43 @@ function Notifications() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const loadNotifications = async () => {
-    try {
-      const response = await api.get('/notifications')
-
-      setNotifications(response.data.notifications || [])
-      setUnreadCount(response.data.unreadCount || 0)
-      setError('')
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Unable to load notifications',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    let isActive = true
+
+    const loadNotifications = async () => {
+      try {
+        const response = await api.get('/notifications')
+
+        if (!isActive) {
+          return
+        }
+
+        setNotifications(
+          response.data.notifications || [],
+        )
+        setUnreadCount(response.data.unreadCount || 0)
+        setError('')
+      } catch (err) {
+        if (!isActive) {
+          return
+        }
+
+        setError(
+          err.response?.data?.message ||
+            'Unable to load notifications',
+        )
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
     loadNotifications()
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   const markAsRead = async (notificationId) => {

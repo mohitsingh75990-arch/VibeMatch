@@ -30,24 +30,40 @@ function MyReports() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const loadReports = async () => {
-    try {
-      const response = await api.get('/reports')
-
-      setReports(response.data.reports || [])
-      setError('')
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Unable to load your reports',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    let isActive = true
+
+    const loadReports = async () => {
+      try {
+        const response = await api.get('/reports')
+
+        if (!isActive) {
+          return
+        }
+
+        setReports(response.data.reports || [])
+        setError('')
+      } catch (err) {
+        if (!isActive) {
+          return
+        }
+
+        setError(
+          err.response?.data?.message ||
+            'Unable to load your reports',
+        )
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
     loadReports()
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   const formatReason = (reason) => {

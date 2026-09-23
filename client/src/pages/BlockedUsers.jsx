@@ -7,27 +7,43 @@ function BlockedUsers() {
   const [unblockingId, setUnblockingId] = useState(null)
   const [error, setError] = useState('')
 
-  const loadBlockedUsers = async () => {
-    try {
-      const response = await api.get('/blocks')
-
-      setBlockedUsers(
-        response.data.blockedUsers || [],
-      )
-
-      setError('')
-    } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Unable to load blocked users',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    let isActive = true
+
+    const loadBlockedUsers = async () => {
+      try {
+        const response = await api.get('/blocks')
+
+        if (!isActive) {
+          return
+        }
+
+        setBlockedUsers(
+          response.data.blockedUsers || [],
+        )
+
+        setError('')
+      } catch (err) {
+        if (!isActive) {
+          return
+        }
+
+        setError(
+          err.response?.data?.message ||
+            'Unable to load blocked users',
+        )
+      } finally {
+        if (isActive) {
+          setLoading(false)
+        }
+      }
+    }
+
     loadBlockedUsers()
+
+    return () => {
+      isActive = false
+    }
   }, [])
 
   const handleUnblock = async (user) => {
