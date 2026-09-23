@@ -1,5 +1,7 @@
+const mongoose = require('mongoose')
 const Interaction = require('../models/Interaction')
 const Notification = require('../models/Notification')
+const Block = require('../models/Block')
 
 const createInteraction = async (req, res) => {
   try {
@@ -24,6 +26,28 @@ const createInteraction = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'You cannot interact with yourself',
+      })
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(toUser)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
+
+    // Block validation: check whether either user has blocked the other
+    const isBlocked = await Block.findOne({
+      $or: [
+        { blocker: fromUser, blocked: toUser },
+        { blocker: toUser, blocked: fromUser },
+      ],
+    })
+
+    if (isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'Interaction not allowed between blocked users',
       })
     }
 
