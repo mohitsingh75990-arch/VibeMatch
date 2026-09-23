@@ -231,9 +231,17 @@ function Discover() {
         details: reportDetails.trim(),
       })
 
+      const reportedUserId = reportUser._id
+
       setReportUser(null)
       setReportReason('spam')
       setReportDetails('')
+
+      setUsers((currentUsers) =>
+        currentUsers.filter(
+          (user) => user._id !== reportedUserId,
+        ),
+      )
 
       window.alert(
         'Report submitted successfully. Thank you for helping keep VibeMatch safe.',

@@ -356,9 +356,13 @@ function Matches() {
         details: reportDetails.trim(),
       })
 
+      const reportedUserId = reportUser._id
+
       setReportUser(null)
       setReportReason('spam')
       setReportDetails('')
+
+      removeUserFromLocalState(reportedUserId)
 
       window.alert(
         'Report submitted successfully. Thank you for helping keep VibeMatch safe.',
