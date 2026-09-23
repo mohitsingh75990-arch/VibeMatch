@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 function Home() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-slate-950 text-white">
@@ -35,19 +37,19 @@ function Home() {
               </p>
 
               <div className="mt-7 flex flex-col gap-3 sm:mt-8 sm:flex-row sm:gap-4">
-                <a
-                  href="/signup"
+                <Link
+                  to="/signup"
                   className="w-full rounded-full bg-white px-7 py-3.5 text-center text-sm font-semibold text-slate-950 transition hover:bg-slate-200 sm:w-auto sm:text-base"
                 >
                   Create your vibe
-                </a>
+                </Link>
 
-                <a
-                  href="/discover"
+                <Link
+                  to="/discover"
                   className="w-full rounded-full border border-white/15 bg-white/5 px-7 py-3.5 text-center text-sm font-semibold text-white backdrop-blur transition hover:bg-white/10 sm:w-auto sm:text-base"
                 >
                   Explore matches
-                </a>
+                </Link>
               </div>
 
               <div className="mt-8 flex flex-wrap gap-x-5 gap-y-3 text-xs text-slate-400 sm:mt-10 sm:gap-6 sm:text-sm">
