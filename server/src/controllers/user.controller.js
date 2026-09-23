@@ -8,6 +8,10 @@ const {
   calculateCompatibility,
 } = require('./compatibility.controller')
 
+const escapeRegex = (string = '') => {
+  return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select(
@@ -372,6 +376,10 @@ const discoverUsers = async (
       gender,
       location,
       minVibeScore,
+      genre,
+      vibeTag,
+      sameCityOnly,
+      sharedMusicOnly,
     } = req.query
 
     const [
@@ -570,12 +578,35 @@ const discoverUsers = async (
       }
     }
 
-    if (location?.trim()) {
+    const isSameCity = sameCityOnly === 'true' || sameCityOnly === true
+    const userCity = currentUser.location?.trim()
+
+    if (isSameCity && userCity) {
       userQuery.location = {
-        $regex:
-          location.trim(),
+        $regex: escapeRegex(userCity),
         $options: 'i',
       }
+    } else if (location?.trim()) {
+      userQuery.location = {
+        $regex: escapeRegex(location.trim()),
+        $options: 'i',
+      }
+    }
+
+    if (genre?.trim()) {
+      const safeGenre = escapeRegex(genre.trim())
+      const genreRegex = new RegExp(`^${safeGenre}$`, 'i')
+
+      const matchingMusicProfiles = await MusicProfile.find({
+        genres: genreRegex,
+      }).select('user')
+
+      const matchingMusicUserIds = matchingMusicProfiles.map((p) => p.user)
+
+      userQuery.$or = [
+        { favoriteGenres: genreRegex },
+        { _id: { $in: matchingMusicUserIds } },
+      ]
     }
 
     const users =
@@ -662,6 +693,46 @@ const discoverUsers = async (
         )
     }
 
+    if (genre?.trim()) {
+      const normGenre = genre.trim().toLowerCase()
+      usersWithCompatibility = usersWithCompatibility.filter((user) => {
+        const userGenres = (user.favoriteGenres || []).map((g) =>
+          String(g).trim().toLowerCase(),
+        )
+        const profile = musicMap.get(user._id.toString())
+        const profileGenres = (profile?.genres || []).map((g) =>
+          String(g).trim().toLowerCase(),
+        )
+        return (
+          userGenres.includes(normGenre) ||
+          profileGenres.includes(normGenre)
+        )
+      })
+    }
+
+    if (vibeTag?.trim()) {
+      const normVibe = vibeTag.trim().toLowerCase()
+      usersWithCompatibility = usersWithCompatibility.filter((user) => {
+        const profile = musicMap.get(user._id.toString())
+        const tags = (profile?.vibeTags || []).map((t) =>
+          String(t).trim().toLowerCase(),
+        )
+        return tags.includes(normVibe)
+      })
+    }
+
+    if (sharedMusicOnly === 'true' || sharedMusicOnly === true) {
+      usersWithCompatibility = usersWithCompatibility.filter((user) => {
+        const breakdown = user.compatibilityBreakdown || {}
+        return (
+          (breakdown.artists || 0) > 0 ||
+          (breakdown.genres || 0) > 0 ||
+          (breakdown.vibes || 0) > 0 ||
+          (breakdown.songs || 0) > 0
+        )
+      })
+    }
+
     return res.status(200).json({
       success: true,
       count:
@@ -699,6 +770,12 @@ const discoverUsers = async (
           )
             ? effectiveMinVibeScore
             : null,
+
+        genre: genre?.trim() || null,
+        vibeTag: vibeTag?.trim() || null,
+        sameCityOnly: isSameCity,
+        sharedMusicOnly:
+          sharedMusicOnly === 'true' || sharedMusicOnly === true,
 
         showSimilarMusic:
           savedShowSimilarMusic,

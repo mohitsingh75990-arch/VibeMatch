@@ -22,6 +22,29 @@ const getImageUrl = (imagePath) => {
   return `${API_ORIGIN}${imagePath}`
 }
 
+const GENRE_OPTIONS = [
+  'Bollywood',
+  'Pop',
+  'Indie',
+  'Rock',
+  'Hip-Hop',
+  'R&B',
+  'EDM',
+  'Punjabi',
+  'Hollywood',
+  'Jazz',
+  'Classical',
+]
+
+const VIBE_OPTIONS = [
+  'Chill',
+  'Romantic',
+  'Late Night',
+  'Party',
+  'Energetic',
+  'Acoustic',
+]
+
 function Discover() {
   const navigate = useNavigate()
 
@@ -30,6 +53,7 @@ function Discover() {
   const [error, setError] = useState('')
   const [actionLoading, setActionLoading] = useState(null)
   const [matchMessage, setMatchMessage] = useState('')
+  const [currentUserLocation, setCurrentUserLocation] = useState('')
 
   const [filters, setFilters] = useState({
     minAge: '',
@@ -37,6 +61,10 @@ function Discover() {
     gender: '',
     location: '',
     minVibeScore: '',
+    genre: '',
+    vibeTag: '',
+    sameCityOnly: false,
+    sharedMusicOnly: false,
   })
 
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -65,13 +93,26 @@ function Discover() {
         params.gender = activeFilters.gender
       }
 
-      if (activeFilters.location?.trim()) {
+      if (activeFilters.sameCityOnly) {
+        params.sameCityOnly = 'true'
+      } else if (activeFilters.location?.trim()) {
         params.location = activeFilters.location.trim()
       }
 
       if (activeFilters.minVibeScore) {
-        params.minVibeScore =
-          activeFilters.minVibeScore
+        params.minVibeScore = activeFilters.minVibeScore
+      }
+
+      if (activeFilters.genre) {
+        params.genre = activeFilters.genre
+      }
+
+      if (activeFilters.vibeTag) {
+        params.vibeTag = activeFilters.vibeTag
+      }
+
+      if (activeFilters.sharedMusicOnly) {
+        params.sharedMusicOnly = 'true'
       }
 
       const response = await api.get('/users/discover', {
@@ -92,6 +133,18 @@ function Discover() {
   }
 
   useEffect(() => {
+    const fetchCurrentProfile = async () => {
+      try {
+        const res = await api.get('/users/me')
+        if (res.data?.user?.location) {
+          setCurrentUserLocation(res.data.user.location.trim())
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+
+    fetchCurrentProfile()
     loadUsers()
   }, [])
 
@@ -101,6 +154,35 @@ function Discover() {
     setFilters((currentFilters) => ({
       ...currentFilters,
       [name]: value,
+    }))
+  }
+
+  const handleToggleGenre = (g) => {
+    setFilters((prev) => ({
+      ...prev,
+      genre: prev.genre.toLowerCase() === g.toLowerCase() ? '' : g,
+    }))
+  }
+
+  const handleToggleVibe = (v) => {
+    setFilters((prev) => ({
+      ...prev,
+      vibeTag: prev.vibeTag.toLowerCase() === v.toLowerCase() ? '' : v,
+    }))
+  }
+
+  const handleToggleSameCity = () => {
+    setFilters((prev) => ({
+      ...prev,
+      sameCityOnly: !prev.sameCityOnly,
+      location: !prev.sameCityOnly ? '' : prev.location,
+    }))
+  }
+
+  const handleToggleSharedMusic = () => {
+    setFilters((prev) => ({
+      ...prev,
+      sharedMusicOnly: !prev.sharedMusicOnly,
     }))
   }
 
@@ -116,6 +198,10 @@ function Discover() {
       gender: '',
       location: '',
       minVibeScore: '',
+      genre: '',
+      vibeTag: '',
+      sameCityOnly: false,
+      sharedMusicOnly: false,
     }
 
     setFilters(clearedFilters)
@@ -124,9 +210,80 @@ function Discover() {
     await loadUsers(clearedFilters)
   }
 
-  const hasActiveFilters = Object.values(filters).some(
-    (value) => value !== '',
-  )
+  const removeIndividualFilter = async (filterKey) => {
+    const updated = {
+      ...filters,
+      [filterKey]:
+        filterKey === 'sameCityOnly' || filterKey === 'sharedMusicOnly'
+          ? false
+          : '',
+    }
+    setFilters(updated)
+    await loadUsers(updated)
+  }
+
+  const activeFilterList = []
+  if (filters.minAge || filters.maxAge) {
+    activeFilterList.push({
+      key: 'age',
+      label: `Age ${filters.minAge || '18'}–${filters.maxAge || '100'}`,
+      onRemove: () => {
+        const updated = { ...filters, minAge: '', maxAge: '' }
+        setFilters(updated)
+        loadUsers(updated)
+      },
+    })
+  }
+  if (filters.gender) {
+    activeFilterList.push({
+      key: 'gender',
+      label: `👤 ${filters.gender}`,
+      onRemove: () => removeIndividualFilter('gender'),
+    })
+  }
+  if (filters.sameCityOnly) {
+    activeFilterList.push({
+      key: 'sameCityOnly',
+      label: `📍 ${currentUserLocation || 'My City'}`,
+      onRemove: () => removeIndividualFilter('sameCityOnly'),
+    })
+  } else if (filters.location?.trim()) {
+    activeFilterList.push({
+      key: 'location',
+      label: `📍 ${filters.location.trim()}`,
+      onRemove: () => removeIndividualFilter('location'),
+    })
+  }
+  if (filters.minVibeScore) {
+    activeFilterList.push({
+      key: 'minVibeScore',
+      label: `⚡ ${filters.minVibeScore}%+ Vibe`,
+      onRemove: () => removeIndividualFilter('minVibeScore'),
+    })
+  }
+  if (filters.genre) {
+    activeFilterList.push({
+      key: 'genre',
+      label: `🎵 ${filters.genre}`,
+      onRemove: () => removeIndividualFilter('genre'),
+    })
+  }
+  if (filters.vibeTag) {
+    activeFilterList.push({
+      key: 'vibeTag',
+      label: `💜 ${filters.vibeTag}`,
+      onRemove: () => removeIndividualFilter('vibeTag'),
+    })
+  }
+  if (filters.sharedMusicOnly) {
+    activeFilterList.push({
+      key: 'sharedMusicOnly',
+      label: `🎶 Shared Music`,
+      onRemove: () => removeIndividualFilter('sharedMusicOnly'),
+    })
+  }
+
+  const hasActiveFilters = activeFilterList.length > 0
 
   const handleInteraction = async (userId, type) => {
     if (actionLoading) {
@@ -336,10 +493,9 @@ function Discover() {
             className="w-full rounded-full border border-violet-200 bg-violet-50 px-5 py-3 text-sm font-semibold text-violet-700 hover:bg-violet-100 sm:w-auto"
           >
             🔎 Filters
-
             {hasActiveFilters && (
-              <span className="ml-2 rounded-full bg-violet-600 px-2 py-0.5 text-xs text-white">
-                Active
+              <span className="ml-2 rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                {activeFilterList.length}
               </span>
             )}
           </button>
@@ -347,115 +503,205 @@ function Discover() {
       </div>
 
       {/* FILTER PANEL */}
-
       {filtersOpen && (
-        <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:mb-8 sm:rounded-3xl sm:p-5">
-          <div className="mb-5">
-            <h2 className="text-lg font-bold text-slate-900 sm:text-xl">
-              Discover Filters
-            </h2>
-
-            <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
-              Find people based on age, gender,
-              location and Vibe Match.
-            </p>
+        <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 sm:mb-8 sm:rounded-3xl sm:p-6">
+          <div className="flex items-center justify-between gap-3 mb-5 border-b border-slate-100 pb-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 sm:text-xl">
+                Smart Discovery Filters ✨
+              </h2>
+              <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                Filter by vibe, music taste, demographics, and location.
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline"
+              >
+                Clear all
+              </button>
+            )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Min Age
-              </label>
+          <div className="space-y-5">
+            {/* 1. Music & Vibe Filters */}
+            <div className="rounded-2xl bg-gradient-to-r from-violet-50/70 via-fuchsia-50/40 to-pink-50/60 p-4 border border-violet-100">
+              <p className="text-xs font-bold uppercase tracking-wider text-violet-800 mb-2.5 flex items-center gap-1.5">
+                <span>🎵</span>
+                <span>Music &amp; Vibe Filters</span>
+              </p>
 
-              <input
-                type="number"
-                name="minAge"
-                value={filters.minAge}
-                onChange={handleFilterChange}
-                min="18"
-                max="100"
-                placeholder="18"
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 sm:text-base"
-              />
+              {/* Vibe Tags */}
+              <div className="mb-3.5">
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                  Vibe Tag
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {VIBE_OPTIONS.map((tag) => {
+                    const isSelected =
+                      filters.vibeTag.toLowerCase() === tag.toLowerCase()
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => handleToggleVibe(tag)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                          isSelected
+                            ? 'bg-violet-600 text-white shadow-xs'
+                            : 'bg-white text-slate-700 border border-violet-200 hover:bg-violet-100/50'
+                        }`}
+                      >
+                        💜 {tag}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Genre Pills */}
+              <div className="mb-3.5">
+                <label className="text-xs font-semibold text-slate-700 block mb-1.5">
+                  Favorite Music Genre
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {GENRE_OPTIONS.map((g) => {
+                    const isSelected =
+                      filters.genre.toLowerCase() === g.toLowerCase()
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => handleToggleGenre(g)}
+                        className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                          isSelected
+                            ? 'bg-violet-600 text-white shadow-xs'
+                            : 'bg-white text-slate-700 border border-violet-200 hover:bg-violet-100/50'
+                        }`}
+                      >
+                        🎵 {g}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Shared Music Checkbox */}
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={filters.sharedMusicOnly}
+                  onChange={handleToggleSharedMusic}
+                  className="rounded border-slate-300 text-violet-600 focus:ring-violet-500 h-4 w-4"
+                />
+                <span>🎶 Show only profiles with shared music (common artists or genres)</span>
+              </label>
             </div>
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Max Age
-              </label>
+            {/* 2. Demographics & Match Score Grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Min Age</label>
+                <input
+                  type="number"
+                  name="minAge"
+                  value={filters.minAge}
+                  onChange={handleFilterChange}
+                  min="18"
+                  max="100"
+                  placeholder="18"
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                />
+              </div>
 
-              <input
-                type="number"
-                name="maxAge"
-                value={filters.maxAge}
-                onChange={handleFilterChange}
-                min="18"
-                max="100"
-                placeholder="35"
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 sm:text-base"
-              />
-            </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Max Age</label>
+                <input
+                  type="number"
+                  name="maxAge"
+                  value={filters.maxAge}
+                  onChange={handleFilterChange}
+                  min="18"
+                  max="100"
+                  placeholder="35"
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                />
+              </div>
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Gender
-              </label>
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Gender</label>
+                <select
+                  name="gender"
+                  value={filters.gender}
+                  onChange={handleFilterChange}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                >
+                  <option value="">Any Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="non-binary">Non-binary</option>
+                </select>
+              </div>
 
-              <select
-                name="gender"
-                value={filters.gender}
-                onChange={handleFilterChange}
-                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 sm:text-base"
-              >
-                <option value="">Any Gender</option>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="non-binary">Non-binary</option>
-              </select>
-            </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-slate-700">City / Location</label>
+                  {currentUserLocation && (
+                    <button
+                      type="button"
+                      onClick={handleToggleSameCity}
+                      className={`text-[11px] font-semibold underline transition ${
+                        filters.sameCityOnly ? 'text-violet-600 font-bold' : 'text-slate-500 hover:text-violet-600'
+                      }`}
+                    >
+                      {filters.sameCityOnly ? '✓ My City' : '📍 My City'}
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  name="location"
+                  value={filters.sameCityOnly ? currentUserLocation : filters.location}
+                  onChange={(e) => {
+                    if (filters.sameCityOnly) {
+                      setFilters((prev) => ({ ...prev, sameCityOnly: false, location: e.target.value }))
+                    } else {
+                      handleFilterChange(e)
+                    }
+                  }}
+                  disabled={filters.sameCityOnly}
+                  placeholder={filters.sameCityOnly ? currentUserLocation : 'e.g. Delhi'}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-violet-50/50 disabled:text-violet-800"
+                />
+              </div>
 
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Location
-              </label>
-
-              <input
-                type="text"
-                name="location"
-                value={filters.location}
-                onChange={handleFilterChange}
-                placeholder="Delhi"
-                className="mt-2 w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 sm:text-base"
-              />
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-slate-700">
-                Min Vibe Score
-              </label>
-
-              <select
-                name="minVibeScore"
-                value={filters.minVibeScore}
-                onChange={handleFilterChange}
-                className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 sm:text-base"
-              >
-                <option value="">Any Score</option>
-                <option value="40">40%+</option>
-                <option value="50">50%+</option>
-                <option value="60">60%+</option>
-                <option value="70">70%+</option>
-                <option value="80">80%+</option>
-                <option value="90">90%+</option>
-              </select>
+              <div>
+                <label className="text-sm font-semibold text-slate-700">Min Vibe Match</label>
+                <select
+                  name="minVibeScore"
+                  value={filters.minVibeScore}
+                  onChange={handleFilterChange}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                >
+                  <option value="">Any Score</option>
+                  <option value="40">40%+</option>
+                  <option value="50">50%+</option>
+                  <option value="60">60%+</option>
+                  <option value="70">70%+</option>
+                  <option value="80">80%+</option>
+                  <option value="90">90%+</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          {/* Action Buttons */}
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={handleApplyFilters}
-              className="w-full rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 sm:w-auto"
+              className="w-full rounded-full bg-violet-600 px-7 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-violet-700 sm:w-auto"
             >
               Apply Filters
             </button>
@@ -463,11 +709,39 @@ function Discover() {
             <button
               type="button"
               onClick={handleClearFilters}
-              className="w-full rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
+              className="w-full rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
             >
-              Clear Filters
+              Reset Filters
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ACTIVE FILTER CHIPS BAR */}
+      {hasActiveFilters && (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-400">
+            Active Filters ({activeFilterList.length}):
+          </span>
+          {activeFilterList.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={item.onRemove}
+              className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50/80 px-3 py-1 text-xs font-medium text-violet-800 shadow-xs transition hover:bg-violet-100 hover:border-violet-300"
+              title="Click to remove filter"
+            >
+              <span>{item.label}</span>
+              <span className="text-violet-500 font-bold">✕</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="text-xs font-semibold text-slate-500 hover:text-rose-600 underline ml-1"
+          >
+            Clear all
+          </button>
         </div>
       )}
 
@@ -498,22 +772,25 @@ function Discover() {
       {/* USERS */}
 
       {users.length === 0 ? (
-        <div className="rounded-2xl bg-white p-7 text-center shadow-sm sm:rounded-3xl sm:p-10">
+        <div className="rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-slate-200 sm:rounded-3xl sm:p-10">
+          <div className="text-5xl mb-3">🔍</div>
           <p className="text-lg font-semibold text-slate-800 sm:text-xl">
-            No people found
+            {hasActiveFilters ? 'No vibes found matching your filters' : 'No people found'}
           </p>
 
-          <p className="mt-2 text-sm text-slate-500 sm:text-base">
-            Try changing or clearing your filters.
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500 sm:text-base">
+            {hasActiveFilters
+              ? 'Try widening your age range, clearing your vibe tag, or exploring more genres.'
+              : 'Keep discovering people and connect with someone who shares your music.'}
           </p>
 
           {hasActiveFilters && (
             <button
               type="button"
               onClick={handleClearFilters}
-              className="mt-5 w-full rounded-full bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 sm:w-auto"
+              className="mt-5 w-full rounded-full bg-violet-600 px-7 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-violet-700 sm:w-auto"
             >
-              Clear Filters
+              Reset All Filters
             </button>
           )}
 
