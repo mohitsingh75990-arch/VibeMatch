@@ -282,7 +282,8 @@ function Notifications() {
                   </p>
                 </div>
               </button>
-            ))}
+            )
+          })}
         </div>
       </div>
     </div>
