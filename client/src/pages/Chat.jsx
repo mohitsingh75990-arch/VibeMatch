@@ -16,6 +16,7 @@ function Chat() {
   const [isTyping, setIsTyping] = useState(false)
   const [isOnline, setIsOnline] = useState(false)
   const [icebreakers, setIcebreakers] = useState([])
+  const [icebreakersLoading, setIcebreakersLoading] = useState(false)
   const [showIcebreakers, setShowIcebreakers] = useState(true)
 
   const typingTimeoutRef = useRef(null)
@@ -113,7 +114,12 @@ function Chat() {
   }
 
   const loadIcebreakers = async () => {
+    if (!userId) {
+      return
+    }
+
     try {
+      setIcebreakersLoading(true)
       const response = await api.get(`/ai/icebreakers/${userId}`)
       if (Array.isArray(response.data?.icebreakers)) {
         const sanitized = response.data.icebreakers
@@ -124,9 +130,18 @@ function Chat() {
           )
           .map((item) => item.trim().slice(0, 300))
         setIcebreakers(sanitized)
+      } else {
+        setIcebreakers([])
       }
-    } catch {
+    } catch (err) {
+      console.error(
+        'Failed to load AI icebreakers:',
+        err.response?.status,
+        err.response?.data || err.message,
+      )
       setIcebreakers([])
+    } finally {
+      setIcebreakersLoading(false)
     }
   }
 
@@ -499,7 +514,14 @@ function Chat() {
                   Say hello to your match.
                 </p>
 
-                {icebreakers.length > 0 && (
+                {icebreakersLoading ? (
+                  <div className="mt-5 rounded-2xl bg-violet-50/70 p-4 border border-violet-100 text-center">
+                    <p className="text-xs font-semibold text-violet-600 flex items-center justify-center gap-2">
+                      <span className="inline-block animate-spin">✨</span>
+                      <span>Generating AI icebreakers...</span>
+                    </p>
+                  </div>
+                ) : icebreakers.length > 0 ? (
                   <div className="mt-5 rounded-2xl bg-gradient-to-br from-violet-50 via-fuchsia-50/50 to-pink-50 p-4 border border-violet-100 text-left">
                     <p className="text-xs font-bold uppercase tracking-wider text-violet-700 flex items-center gap-1.5 mb-2.5">
                       <span>✨</span>
@@ -517,6 +539,17 @@ function Chat() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      onClick={loadIcebreakers}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3.5 py-1.5 text-xs font-medium text-violet-700 shadow-xs transition hover:bg-violet-50 hover:border-violet-300 active:scale-95"
+                    >
+                      <span>✨</span>
+                      <span>Generate AI Icebreakers</span>
+                    </button>
                   </div>
                 )}
               </div>

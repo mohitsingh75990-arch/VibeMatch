@@ -1,3 +1,4 @@
+const mongoose = require('mongoose')
 const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
@@ -158,28 +159,34 @@ const generateHeuristicIcebreakers = (
   commonVibes,
   commonSongs,
 ) => {
+  const name =
+    (targetUserName &&
+      typeof targetUserName === 'string' &&
+      targetUserName.trim()) ||
+    'there'
+
   const icebreakers = []
 
   // Icebreaker 1: Music focused
   if (commonArtists.length > 0) {
     icebreakers.push(
-      `Hey ${targetUserName}! I saw we both listen to ${commonArtists[0]} — what's your all-time favorite track by them?`,
+      `Hey ${name}! I saw we both listen to ${commonArtists[0]} — what's your all-time favorite track by them?`,
     )
   } else if (commonSongs.length > 0) {
     icebreakers.push(
-      `Hey ${targetUserName}! Love that you like "${commonSongs[0]}". What first got you into it?`,
+      `Hey ${name}! Love that you like "${commonSongs[0]}". What first got you into it?`,
     )
   } else if (commonGenres.length > 0) {
     icebreakers.push(
-      `Hey ${targetUserName}! Since we both enjoy ${commonGenres[0]}, who's an underrated artist in that genre you think I should hear?`,
+      `Hey ${name}! Since we both enjoy ${commonGenres[0]}, who's an underrated artist in that genre you think I should hear?`,
     )
   } else if (targetData.artists.length > 0) {
     icebreakers.push(
-      `Hey ${targetUserName}! I noticed you like ${targetData.artists[0]}. What song should I listen to first to get into them?`,
+      `Hey ${name}! I noticed you like ${targetData.artists[0]}. What song should I listen to first to get into them?`,
     )
   } else {
     icebreakers.push(
-      `Hey ${targetUserName}! If we had a 3-hour road trip, what would be the very first song you'd put on?`,
+      `Hey ${name}! If we had a 3-hour road trip, what would be the very first song you'd put on?`,
     )
   }
 
@@ -297,10 +304,10 @@ const getMatchExplanation = async (req, res) => {
     const currentUserId = req.user.userId
     const { userId: targetUserId } = req.params
 
-    if (!targetUserId) {
+    if (!targetUserId || !mongoose.Types.ObjectId.isValid(targetUserId)) {
       return res.status(400).json({
         success: false,
-        message: 'Target user ID is required',
+        message: 'Valid target user ID is required',
       })
     }
 
@@ -416,10 +423,10 @@ const getConversationStarters = async (req, res) => {
     const currentUserId = req.user.userId
     const { userId: targetUserId } = req.params
 
-    if (!targetUserId) {
+    if (!targetUserId || !mongoose.Types.ObjectId.isValid(targetUserId)) {
       return res.status(400).json({
         success: false,
-        message: 'Target user ID is required',
+        message: 'Valid target user ID is required',
       })
     }
 
