@@ -15,6 +15,7 @@ const notificationPreferenceRoutes =
   require('./routes/notificationPreference.routes')
 const blockRoutes = require('./routes/block.routes')
 const reportRoutes = require('./routes/report.routes')
+const aiRoutes = require('./routes/ai.routes')
 
 const app = express()
 
@@ -45,6 +46,7 @@ app.use(
 )
 app.use('/api/blocks', blockRoutes)
 app.use('/api/reports', reportRoutes)
+app.use('/api/ai', aiRoutes)
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({

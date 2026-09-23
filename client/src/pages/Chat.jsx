@@ -15,6 +15,8 @@ function Chat() {
   const [error, setError] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isOnline, setIsOnline] = useState(false)
+  const [icebreakers, setIcebreakers] = useState([])
+  const [showIcebreakers, setShowIcebreakers] = useState(true)
 
   const typingTimeoutRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -110,9 +112,34 @@ function Chat() {
     }
   }
 
+  const loadIcebreakers = async () => {
+    try {
+      const response = await api.get(`/ai/icebreakers/${userId}`)
+      if (Array.isArray(response.data?.icebreakers)) {
+        const sanitized = response.data.icebreakers
+          .filter(
+            (item) =>
+              typeof item === 'string' &&
+              item.trim().length > 0,
+          )
+          .map((item) => item.trim().slice(0, 300))
+        setIcebreakers(sanitized)
+      }
+    } catch {
+      setIcebreakers([])
+    }
+  }
+
+  const handleSelectIcebreaker = (starter) => {
+    if (typeof starter === 'string') {
+      setText(starter)
+    }
+  }
+
   useEffect(() => {
     loadUser()
     loadMessages()
+    loadIcebreakers()
 
     const currentUserId = getCurrentUserId()
 
@@ -463,7 +490,7 @@ function Chat() {
             )}
 
             {!loading && messages.length === 0 && (
-              <div className="m-auto text-center">
+              <div className="m-auto text-center px-4 py-6 max-w-md">
                 <p className="text-lg font-semibold text-slate-700">
                   Start the conversation 💜
                 </p>
@@ -471,6 +498,27 @@ function Chat() {
                 <p className="mt-1 text-sm text-slate-500">
                   Say hello to your match.
                 </p>
+
+                {icebreakers.length > 0 && (
+                  <div className="mt-5 rounded-2xl bg-gradient-to-br from-violet-50 via-fuchsia-50/50 to-pink-50 p-4 border border-violet-100 text-left">
+                    <p className="text-xs font-bold uppercase tracking-wider text-violet-700 flex items-center gap-1.5 mb-2.5">
+                      <span>✨</span>
+                      <span>AI Icebreakers (click to paste)</span>
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {icebreakers.map((starter, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleSelectIcebreaker(starter)}
+                          className="rounded-xl border border-violet-200/80 bg-white/90 p-2.5 text-left text-xs font-medium text-slate-800 shadow-xs transition hover:bg-violet-50/70 hover:border-violet-300 active:scale-[0.98]"
+                        >
+                          💬 {starter}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -547,6 +595,38 @@ function Chat() {
         </div>
 
         <div className="shrink-0 border-t border-slate-200 bg-white">
+          {showIcebreakers && icebreakers.length > 0 && (
+            <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/70 to-fuchsia-50/70 px-3 py-2 sm:px-4">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-xs font-bold text-violet-800">
+                  <span>✨</span>
+                  <span>AI Suggestions</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowIcebreakers(false)}
+                  className="rounded px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-600"
+                  title="Dismiss AI suggestions"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {icebreakers.map((starter, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    onClick={() => handleSelectIcebreaker(starter)}
+                    className="truncate max-w-[280px] sm:max-w-xs rounded-full border border-violet-200 bg-white px-3 py-1 text-xs text-slate-700 transition hover:border-violet-400 hover:bg-violet-50 hover:text-violet-900 active:scale-95"
+                    title={starter}
+                  >
+                    💡 {starter}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="px-4 pt-2 text-sm text-red-600 sm:px-5">
               {error}
