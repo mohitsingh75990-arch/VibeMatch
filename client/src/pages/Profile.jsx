@@ -25,6 +25,15 @@ const ALLOWED_IMAGE_TYPES = [
   'image/webp',
 ]
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:5000/api'
+
+const API_ORIGIN = API_BASE_URL.replace(
+  /\/api\/?$/,
+  '',
+)
+
 function Profile() {
   const { user, login, token } = useAuth()
 
@@ -81,7 +90,7 @@ function Profile() {
       return imagePath
     }
 
-    return `http://localhost:5000${imagePath}`
+    return `${API_ORIGIN}${imagePath}`
   }
 
   useEffect(() => {
@@ -542,7 +551,7 @@ function Profile() {
         )}
 
         {musicSuccess && (
-          <div className="mb-5 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 py-4 text-sm leading-6 text-fuchsia-300 sm:mb-6 sm:px-5">
+          <div className="mb-5 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-4 text-sm leading-6 text-fuchsia-300 sm:mb-6 sm:px-5">
             {musicSuccess}
           </div>
         )}
@@ -554,20 +563,16 @@ function Profile() {
         )}
 
         {preferencesSuccess && (
-          <div className="mb-5 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 py-4 text-sm leading-6 text-fuchsia-300 sm:mb-6 sm:px-5">
+          <div className="mb-5 rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-4 text-sm leading-6 text-fuchsia-300 sm:mb-6 sm:px-5">
             {preferencesSuccess}
           </div>
         )}
 
         <div className="space-y-5 sm:space-y-6">
-          {/* BASIC INFORMATION */}
-
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <h2 className="text-lg font-semibold sm:text-xl">
               Basic information
             </h2>
-
-            {/* PROFILE PHOTO */}
 
             <div className="mt-5 rounded-2xl border border-fuchsia-400/10 bg-fuchsia-500/5 p-4 sm:mt-6 sm:p-5">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
@@ -753,8 +758,6 @@ function Profile() {
             </div>
           </section>
 
-          {/* DATING PREFERENCES */}
-
           <section className="rounded-2xl border border-fuchsia-400/20 bg-fuchsia-500/[0.04] p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-400 sm:text-sm sm:tracking-[0.2em]">
@@ -770,8 +773,6 @@ function Profile() {
                 personalize your discovery experience.
               </p>
             </div>
-
-            {/* INTERESTED IN */}
 
             <div className="mt-6 sm:mt-7">
               <label className="mb-3 block text-sm font-medium text-slate-300">
@@ -841,8 +842,6 @@ function Profile() {
               </p>
             </div>
 
-            {/* AGE RANGE */}
-
             <div className="mt-6 sm:mt-7">
               <label className="mb-3 block text-sm font-medium text-slate-300">
                 Preferred age range
@@ -897,8 +896,6 @@ function Profile() {
               </div>
             </div>
 
-            {/* VIBE SCORE */}
-
             <div className="mt-6 sm:mt-7">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
@@ -942,8 +939,6 @@ function Profile() {
                 <span>100</span>
               </div>
             </div>
-
-            {/* SIMILAR MUSIC */}
 
             <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 sm:mt-7 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:p-5">
               <div className="min-w-0">
@@ -1003,8 +998,6 @@ function Profile() {
                 : 'Save dating preferences'}
             </button>
           </section>
-
-          {/* MUSIC PROFILE */}
 
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <h2 className="text-lg font-semibold sm:text-xl">
@@ -1139,8 +1132,6 @@ function Profile() {
               </div>
             </div>
           </section>
-
-          {/* ACTIONS */}
 
           <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <button
