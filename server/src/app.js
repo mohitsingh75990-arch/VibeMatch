@@ -9,6 +9,7 @@ const matchRoutes = require('./routes/match.routes')
 const messageRoutes = require('./routes/message.routes')
 const compatibilityRoutes = require('./routes/compatibility.routes')
 const musicRoutes = require('./routes/music.routes')
+const musicCompatibilityRoutes = require('./routes/musicCompatibility.routes')
 const notificationRoutes = require('./routes/notification.routes')
 const notificationPreferenceRoutes =
   require('./routes/notificationPreference.routes')
@@ -33,6 +34,10 @@ app.use('/api/matches', matchRoutes)
 app.use('/api/messages', messageRoutes)
 app.use('/api/compatibility', compatibilityRoutes)
 app.use('/api/music', musicRoutes)
+app.use(
+  '/api/music-compatibility',
+  musicCompatibilityRoutes,
+)
 app.use('/api/notifications', notificationRoutes)
 app.use(
   '/api/notification-preferences',

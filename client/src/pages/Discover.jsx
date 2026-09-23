@@ -409,10 +409,8 @@ function Discover() {
               >
                 <option value="">Any Gender</option>
                 <option value="male">Male</option>
-                <option value="female">
-                  Female
-                </option>
-                <option value="other">Other</option>
+                <option value="female">Female</option>
+                <option value="non-binary">Non-binary</option>
               </select>
             </div>
 
