@@ -1,6 +1,29 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+const API_ORIGIN = API_BASE_URL.replace(
+  /\/api\/?$/,
+  '',
+)
+
+const getImageUrl = (imagePath) => {
+  if (!imagePath) {
+    return ''
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://')
+  ) {
+    return imagePath
+  }
+
+  return `${API_ORIGIN}${imagePath}`
+}
+
 function BlockedUsers() {
   const [blockedUsers, setBlockedUsers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -134,7 +157,7 @@ function BlockedUsers() {
                 <div className="flex min-w-0 items-center gap-4">
                   {user.profileImage ? (
                     <img
-                      src={user.profileImage}
+                      src={getImageUrl(user.profileImage)}
                       alt={user.name}
                       className="h-16 w-16 shrink-0 rounded-full object-cover"
                     />
