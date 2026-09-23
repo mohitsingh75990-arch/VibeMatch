@@ -1,6 +1,7 @@
 const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
+const Interaction = require('../models/Interaction')
 
 const {
   calculateCompatibility,
@@ -361,6 +362,9 @@ const updatePreferences = async (
 
   Manual query filters override the
   saved preferences.
+
+  Users already liked or passed are
+  excluded from Discover.
 */
 const discoverUsers = async (
   req,
@@ -382,6 +386,7 @@ const discoverUsers = async (
       currentUser,
       currentMusic,
       blocks,
+      interactions,
     ] = await Promise.all([
       User.findById(
         currentUserId,
@@ -402,6 +407,12 @@ const discoverUsers = async (
         ],
       }).select(
         'blocker blocked',
+      ),
+
+      Interaction.find({
+        fromUser: currentUserId,
+      }).select(
+        'toUser',
       ),
     ])
 
@@ -500,11 +511,18 @@ const discoverUsers = async (
         },
       )
 
+    const interactedUserIds =
+      interactions.map(
+        (interaction) =>
+          interaction.toUser.toString(),
+      )
+
     const userQuery = {
       _id: {
         $nin: [
           currentUserId,
           ...blockedUserIds,
+          ...interactedUserIds,
         ],
       },
     }
