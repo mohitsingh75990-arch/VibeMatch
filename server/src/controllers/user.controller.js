@@ -2,6 +2,7 @@ const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
 const Interaction = require('../models/Interaction')
+const Report = require('../models/Report')
 
 const {
   calculateCompatibility,
@@ -208,7 +209,8 @@ const uploadProfileImage = async (
         bio: user.bio,
         location: user.location,
         profileImage: user.profileImage,
-        interests: user.interests,
+        interests:
+          user.interests,
         favoriteArtists:
           user.favoriteArtists,
         favoriteGenres:
@@ -355,16 +357,6 @@ const updatePreferences = async (
 
 /*
   Discover users
-
-  Saved dating preferences are used
-  automatically when no manual filter
-  is supplied.
-
-  Manual query filters override the
-  saved preferences.
-
-  Users already liked or passed are
-  excluded from Discover.
 */
 const discoverUsers = async (
   req,
@@ -387,6 +379,7 @@ const discoverUsers = async (
       currentMusic,
       blocks,
       interactions,
+      reports,
     ] = await Promise.all([
       User.findById(
         currentUserId,
@@ -413,6 +406,12 @@ const discoverUsers = async (
         fromUser: currentUserId,
       }).select(
         'toUser',
+      ),
+
+      Report.find({
+        reporter: currentUserId,
+      }).select(
+        'reportedUser',
       ),
     ])
 
@@ -472,11 +471,6 @@ const discoverUsers = async (
       savedPreferences.showSimilarMusic !==
       false
 
-    /*
-      Manual filters override
-      saved preferences.
-    */
-
     const effectiveMinAge =
       minAge !== undefined
         ? Number(minAge)
@@ -517,19 +511,24 @@ const discoverUsers = async (
           interaction.toUser.toString(),
       )
 
+    const reportedUserIds =
+      reports.map(
+        (report) =>
+          report.reportedUser.toString(),
+      )
+
+    const excludedUserIds = [
+      currentUserId,
+      ...blockedUserIds,
+      ...interactedUserIds,
+      ...reportedUserIds,
+    ]
+
     const userQuery = {
       _id: {
-        $nin: [
-          currentUserId,
-          ...blockedUserIds,
-          ...interactedUserIds,
-        ],
+        $nin: excludedUserIds,
       },
     }
-
-    /*
-      Age filter
-    */
 
     if (
       Number.isFinite(
@@ -560,16 +559,6 @@ const discoverUsers = async (
       }
     }
 
-    /*
-      Gender filter
-
-      Manual gender filter gets
-      priority.
-
-      Otherwise saved
-      interestedIn is used.
-    */
-
     if (effectiveGender) {
       userQuery.gender =
         effectiveGender
@@ -581,10 +570,6 @@ const discoverUsers = async (
       }
     }
 
-    /*
-      Location filter
-    */
-
     if (location?.trim()) {
       userQuery.location = {
         $regex:
@@ -592,10 +577,6 @@ const discoverUsers = async (
         $options: 'i',
       }
     }
-
-    /*
-      Load candidate users.
-    */
 
     const users =
       await User.find(
@@ -611,10 +592,6 @@ const discoverUsers = async (
       users.map(
         (user) => user._id,
       )
-
-    /*
-      Load music profiles.
-    */
 
     const musicProfiles =
       await MusicProfile.find({
@@ -632,15 +609,6 @@ const discoverUsers = async (
           ],
         ),
       )
-
-    /*
-      Calculate compatibility.
-
-      The current user's
-      showSimilarMusic preference
-      controls whether music factors
-      are included in the score.
-    */
 
     let usersWithCompatibility =
       users
@@ -681,10 +649,6 @@ const discoverUsers = async (
             a.vibeScore,
         )
 
-    /*
-      Minimum Vibe Score filter.
-    */
-
     if (
       Number.isFinite(
         effectiveMinVibeScore,
@@ -700,7 +664,6 @@ const discoverUsers = async (
 
     return res.status(200).json({
       success: true,
-
       count:
         usersWithCompatibility.length,
 
