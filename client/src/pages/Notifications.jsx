@@ -2,6 +2,33 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+const API_ORIGIN = API_BASE_URL.replace(
+  /\/api\/?$/,
+  '',
+)
+
+const getImageUrl = (imagePath) => {
+  if (!imagePath) {
+    return ''
+  }
+
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://')
+  ) {
+    return imagePath
+  }
+
+  const normalizedPath = imagePath.startsWith('/')
+    ? imagePath
+    : `/${imagePath}`
+
+  return `${API_ORIGIN}${normalizedPath}`
+}
+
 function Notifications() {
   const navigate = useNavigate()
 
@@ -193,32 +220,47 @@ function Notifications() {
           )}
 
           {!loading &&
-            notifications.map((notification) => (
-              <button
-                key={notification._id}
-                type="button"
-                onClick={() =>
-                  handleNotificationClick(notification)
-                }
-                className={`flex w-full items-start gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50 ${
-                  notification.isRead
-                    ? 'bg-white'
-                    : 'bg-violet-50/60'
-                }`}
-              >
-                {notification.sender?.profileImage ? (
-                  <img
-                    src={notification.sender.profileImage}
-                    alt={notification.sender.name}
-                    className="h-12 w-12 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xl">
+            notifications.map((notification) => {
+              const sender =
+                notification.sender || notification.relatedUser
+              const avatarUrl = getImageUrl(sender?.profileImage)
+
+              return (
+                <button
+                  key={notification._id}
+                  type="button"
+                  onClick={() =>
+                    handleNotificationClick(notification)
+                  }
+                  className={`flex w-full items-start gap-4 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 hover:bg-slate-50 ${
+                    notification.isRead
+                      ? 'bg-white'
+                      : 'bg-violet-50/60'
+                  }`}
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt={sender?.name || 'User'}
+                      className="h-12 w-12 shrink-0 rounded-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none'
+                        event.currentTarget.nextElementSibling?.classList.remove(
+                          'hidden',
+                        )
+                      }}
+                    />
+                  ) : null}
+
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xl ${
+                      avatarUrl ? 'hidden' : ''
+                    }`}
+                  >
                     {notification.type === 'message'
                       ? '💬'
                       : '💜'}
                   </div>
-                )}
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
