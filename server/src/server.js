@@ -11,10 +11,18 @@ const PORT = process.env.PORT || 5000
 
 const server = http.createServer(app)
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5175',
+  process.env.CLIENT_URL,
+  'https://vibematch-2itmk.onrender.com',
+].filter(Boolean)
+
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:5175',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 })
 
@@ -33,8 +41,6 @@ io.on('connection', (socket) => {
     `Socket connected: ${socket.id}`,
   )
 
-  // Send current online users whenever
-  // a client requests the latest presence list.
   socket.on('get_online_users', () => {
     socket.emit('online_users', {
       userIds: getOnlineUserIds(),
@@ -50,6 +56,44 @@ io.on('connection', (socket) => {
       return
     }
 
+    // Prevent the same socket from being counted
+    // multiple times if "join" is emitted repeatedly.
+    if (socket.userId === userId) {
+      socket.emit('online_users', {
+        userIds: getOnlineUserIds(),
+      })
+
+      console.log(
+        `User ${userId} already joined on socket ${socket.id}; ignoring duplicate join`,
+      )
+
+      return
+    }
+
+    // If this socket was previously associated with
+    // another user, remove the old association first.
+    if (socket.userId && socket.userId !== userId) {
+      const previousUserId = socket.userId
+      const previousConnections =
+        onlineUsers.get(previousUserId) || 0
+
+      const remainingPreviousConnections =
+        Math.max(previousConnections - 1, 0)
+
+      if (remainingPreviousConnections === 0) {
+        onlineUsers.delete(previousUserId)
+
+        io.emit('user_offline', {
+          userId: previousUserId,
+        })
+      } else {
+        onlineUsers.set(
+          previousUserId,
+          remainingPreviousConnections,
+        )
+      }
+    }
+
     socket.userId = userId
     socket.join(`user:${userId}`)
 
@@ -61,14 +105,10 @@ io.on('connection', (socket) => {
       currentConnections + 1,
     )
 
-    // Send the complete current online-user list
-    // to the newly connected client.
     socket.emit('online_users', {
       userIds: getOnlineUserIds(),
     })
 
-    // Only announce online when the first
-    // connection for this user appears.
     if (currentConnections === 0) {
       io.emit('user_online', {
         userId,

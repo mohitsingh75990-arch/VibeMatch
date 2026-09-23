@@ -1,28 +1,17 @@
 import { io } from 'socket.io-client'
 
-const socket = io('http://localhost:5000', {
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  'http://localhost:5000/api'
+
+const SOCKET_URL = API_URL.replace(
+  /\/api\/?$/,
+  '',
+)
+
+const socket = io(SOCKET_URL, {
   autoConnect: false,
-})
-
-socket.on('connect', () => {
-  console.log(
-    '🟢 Socket connected:',
-    socket.id,
-  )
-})
-
-socket.on('connect_error', (error) => {
-  console.error(
-    '🔴 Socket connection error:',
-    error.message,
-  )
-})
-
-socket.on('disconnect', (reason) => {
-  console.log(
-    '⚪ Socket disconnected:',
-    reason,
-  )
+  transports: ['websocket', 'polling'],
 })
 
 export default socket

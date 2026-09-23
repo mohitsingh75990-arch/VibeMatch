@@ -33,7 +33,6 @@ function Chat() {
     }
   }
 
-  // Convert backend image path into a browser-accessible URL.
   const getProfileImageUrl = (profileImage) => {
     if (!profileImage) {
       return null
@@ -122,8 +121,8 @@ function Chat() {
     }
 
     const handleConnect = () => {
-      console.log('Chat socket connected')
-      socket.emit('join', currentUserId)
+      console.log('Chat socket already connected')
+      socket.emit('get_online_users')
     }
 
     const handleOnlineUsers = ({ userIds = [] }) => {
@@ -237,22 +236,17 @@ function Chat() {
     socket.on('user_stop_typing', handleUserStopTyping)
     socket.on('user_online', handleUserOnline)
     socket.on('user_offline', handleUserOffline)
-
     socket.on(
       'message_delivered',
       handleMessageDelivered,
     )
-
     socket.on(
       'message_read',
       handleMessageRead,
     )
 
     if (socket.connected) {
-      socket.emit('join', currentUserId)
       socket.emit('get_online_users')
-    } else {
-      socket.connect()
     }
 
     markMessagesDelivered()
@@ -278,18 +272,18 @@ function Chat() {
       socket.off('user_stop_typing', handleUserStopTyping)
       socket.off('user_online', handleUserOnline)
       socket.off('user_offline', handleUserOffline)
-
       socket.off(
         'message_delivered',
         handleMessageDelivered,
       )
-
       socket.off(
         'message_read',
         handleMessageRead,
       )
 
-      socket.disconnect()
+      // IMPORTANT:
+      // Chat does NOT disconnect the global socket.
+      // AuthContext owns the socket connection.
     }
   }, [userId])
 
@@ -416,8 +410,6 @@ function Chat() {
   return (
     <div className="h-[calc(100vh-64px)] bg-slate-50 px-2 py-2 sm:px-4 sm:py-4">
       <div className="mx-auto flex h-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-lg sm:rounded-3xl">
-
-        {/* Fixed Header */}
         <div className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
           <button
             type="button"
@@ -462,7 +454,6 @@ function Chat() {
           </div>
         </div>
 
-        {/* Only Messages Scroll */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
           <div className="flex min-h-full flex-col gap-3">
             {loading && (
@@ -555,7 +546,6 @@ function Chat() {
           </div>
         </div>
 
-        {/* Fixed Bottom Composer */}
         <div className="shrink-0 border-t border-slate-200 bg-white">
           {error && (
             <div className="px-4 pt-2 text-sm text-red-600 sm:px-5">
