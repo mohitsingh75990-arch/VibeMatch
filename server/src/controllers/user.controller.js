@@ -1,8 +1,18 @@
+const fs = require('fs')
+const path = require('path')
 const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
 const Interaction = require('../models/Interaction')
 const Report = require('../models/Report')
+const {
+  isCloudinaryConfigured,
+  uploadToCloudinary,
+  deleteFromCloudinary,
+} = require('../utils/cloudinary')
+const {
+  uploadDirectory,
+} = require('../middleware/upload.middleware')
 
 const {
   calculateCompatibility,
@@ -170,21 +180,16 @@ const updateProfile = async (req, res) => {
 /*
   Upload profile image
 */
-const uploadProfileImage = async (
-  req,
-  res,
-) => {
+const uploadProfileImage = async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return res.status(400).json({
         success: false,
         message: 'Please select an image',
       })
     }
 
-    const user = await User.findById(
-      req.user.userId,
-    )
+    const user = await User.findById(req.user.userId)
 
     if (!user) {
       return res.status(404).json({
@@ -193,16 +198,55 @@ const uploadProfileImage = async (
       })
     }
 
-    const imageUrl = `/uploads/${req.file.filename}`
+    const isProduction = process.env.NODE_ENV === 'production'
+    const hasCloudinary = isCloudinaryConfigured()
+
+    // Production rule: Cloudinary must be configured in production
+    if (isProduction && !hasCloudinary) {
+      console.error(
+        'Profile upload error: Cloudinary credentials missing in production environment.',
+      )
+      return res.status(500).json({
+        success: false,
+        message:
+          'Persistent image storage is not configured on the production server. Please configure Cloudinary credentials.',
+      })
+    }
+
+    let imageUrl = ''
+
+    if (hasCloudinary) {
+      // Clean up previous Cloudinary asset if existing profileImage is on Cloudinary
+      if (
+        user.profileImage &&
+        typeof user.profileImage === 'string' &&
+        user.profileImage.includes('res.cloudinary.com')
+      ) {
+        await deleteFromCloudinary(user.profileImage)
+      }
+
+      const result = await uploadToCloudinary(req.file.buffer, user._id)
+      imageUrl = result.secure_url
+    } else {
+      // Local development fallback only when NOT in production
+      if (!fs.existsSync(uploadDirectory)) {
+        fs.mkdirSync(uploadDirectory, { recursive: true })
+      }
+
+      const extension = path.extname(req.file.originalname) || '.jpg'
+      const filename = `profile-${user._id}-${Date.now()}${extension}`
+      const destination = path.join(uploadDirectory, filename)
+
+      await fs.promises.writeFile(destination, req.file.buffer)
+      imageUrl = `/uploads/${filename}`
+    }
 
     user.profileImage = imageUrl
-
     await user.save()
 
     return res.status(200).json({
       success: true,
-      message:
-        'Profile image uploaded successfully',
+      message: 'Profile image uploaded successfully',
       profileImage: imageUrl,
       user: {
         id: user._id,
@@ -213,28 +257,19 @@ const uploadProfileImage = async (
         bio: user.bio,
         location: user.location,
         profileImage: user.profileImage,
-        interests:
-          user.interests,
-        favoriteArtists:
-          user.favoriteArtists,
-        favoriteGenres:
-          user.favoriteGenres,
-        favoriteSongs:
-          user.favoriteSongs,
-        datingPreferences:
-          user.datingPreferences,
+        interests: user.interests,
+        favoriteArtists: user.favoriteArtists,
+        favoriteGenres: user.favoriteGenres,
+        favoriteSongs: user.favoriteSongs,
+        datingPreferences: user.datingPreferences,
       },
     })
   } catch (error) {
-    console.error(
-      'Upload profile image error:',
-      error,
-    )
+    console.error('Upload profile image error:', error)
 
     return res.status(500).json({
       success: false,
-      message:
-        'Unable to upload profile image',
+      message: error.message || 'Unable to upload profile image',
     })
   }
 }
