@@ -136,6 +136,14 @@ const login = async (req, res) => {
       })
     }
 
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        message:
+          'This account was created with Google. Please use Google Sign-In.',
+      })
+    }
+
     const passwordMatches =
       await bcrypt.compare(
         password,
@@ -258,6 +266,14 @@ const changePassword = async (
         success: false,
         message:
           'User not found',
+      })
+    }
+
+    if (!user.password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'This account was registered with Google and does not have a password set.',
       })
     }
 
@@ -603,6 +619,275 @@ const resendVerification = async (req, res) => {
   }
 }
 
+/*
+  Google OAuth: Redirect to Google authorization
+*/
+const googleAuth = async (req, res) => {
+  const clientOrigin =
+    process.env.CLIENT_URL || 'http://localhost:5173'
+
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+
+    if (!clientId || !clientSecret) {
+      console.error('Google OAuth credentials are not configured')
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Google Sign-In is not configured on the server',
+        )}`,
+      )
+    }
+
+    const callbackUrl =
+      process.env.GOOGLE_CALLBACK_URL ||
+      `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+
+    const state = jwt.sign(
+      {
+        purpose: 'google_oauth_state',
+        nonce: crypto.randomBytes(16).toString('hex'),
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '15m' },
+    )
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: callbackUrl,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'offline',
+      prompt: 'select_account',
+      state,
+    })
+
+    return res.redirect(
+      `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    )
+  } catch (error) {
+    console.error('Google auth initiation error:', error.message)
+    return res.redirect(
+      `${clientOrigin}/login?error=${encodeURIComponent(
+        'Unable to initialize Google sign-in',
+      )}`,
+    )
+  }
+}
+
+/*
+  Google OAuth Callback: Verify code, exchange token, find/create user, issue JWT
+*/
+const googleCallback = async (req, res) => {
+  const clientOrigin =
+    process.env.CLIENT_URL || 'http://localhost:5173'
+
+  try {
+    const { code, state, error: oauthError } = req.query
+
+    if (oauthError) {
+      console.warn('Google OAuth returned error:', oauthError)
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Google sign-in was cancelled or denied.',
+        )}`,
+      )
+    }
+
+    if (!code || !state) {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Invalid OAuth response received from Google.',
+        )}`,
+      )
+    }
+
+    // Verify state token
+    try {
+      const decoded = jwt.verify(state, process.env.JWT_SECRET)
+      if (decoded.purpose !== 'google_oauth_state') {
+        return res.redirect(
+          `${clientOrigin}/login?error=${encodeURIComponent(
+            'Invalid OAuth state token.',
+          )}`,
+        )
+      }
+    } catch {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Expired or invalid OAuth state session. Please try again.',
+        )}`,
+      )
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+    const callbackUrl =
+      process.env.GOOGLE_CALLBACK_URL ||
+      `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+
+    // Exchange authorization code for Google access token
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: callbackUrl,
+        grant_type: 'authorization_code',
+      }),
+    })
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text()
+      console.error('Google token exchange failed:', errorText)
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Failed to exchange authorization code with Google.',
+        )}`,
+      )
+    }
+
+    const tokenData = await tokenResponse.json()
+    const accessToken = tokenData.access_token
+
+    if (!accessToken) {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Missing access token from Google.',
+        )}`,
+      )
+    }
+
+    // Fetch user profile from Google UserInfo endpoint
+    const userinfoResponse = await fetch(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    )
+
+    if (!userinfoResponse.ok) {
+      const errorText = await userinfoResponse.text()
+      console.error('Google userinfo fetch failed:', errorText)
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Failed to retrieve Google profile information.',
+        )}`,
+      )
+    }
+
+    const googleUser = await userinfoResponse.json()
+    const {
+      sub: googleId,
+      email,
+      name,
+      picture,
+      email_verified: emailVerified,
+    } = googleUser
+
+    if (!email) {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Google account does not have an associated email address.',
+        )}`,
+      )
+    }
+
+    // Check if Google confirms email is verified
+    if (emailVerified !== true && emailVerified !== 'true') {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Your Google account email is not verified by Google.',
+        )}`,
+      )
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+
+    // 1. Try finding user by googleId
+    let user = await User.findOne({ googleId })
+
+    if (!user) {
+      // 2. Try finding user by email
+      user = await User.findOne({ email: normalizedEmail })
+
+      if (user) {
+        // If existing user has not verified their email, do NOT silently hijack
+        if (!user.isEmailVerified) {
+          return res.redirect(
+            `${clientOrigin}/verify-email?email=${encodeURIComponent(
+              user.email,
+            )}&message=${encodeURIComponent(
+              'An unverified account with this email already exists. Please verify your email first.',
+            )}`,
+          )
+        }
+
+        // Link Google ID to existing verified user
+        user.googleId = googleId
+        if (!user.profileImage && picture) {
+          user.profileImage = picture
+        }
+        await user.save()
+      } else {
+        // 3. Create new user with Google profile
+        const displayName =
+          (name && name.trim()) || normalizedEmail.split('@')[0]
+
+        user = await User.create({
+          name: displayName,
+          email: normalizedEmail,
+          googleId,
+          profileImage: picture || undefined,
+          isEmailVerified: true,
+          isAdmin: false,
+        })
+      }
+    } else {
+      // User found by googleId - update picture if they don't have one
+      if (!user.profileImage && picture) {
+        user.profileImage = picture
+        await user.save()
+      }
+    }
+
+    // Check if account is suspended
+    if (user.suspendedUntil && user.suspendedUntil > new Date()) {
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          `Account is temporarily suspended until ${user.suspendedUntil.toISOString()}`,
+        )}`,
+      )
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: user._id.toString(),
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: '7d',
+      },
+    )
+
+    return res.redirect(`${clientOrigin}/login?token=${token}&google=true`)
+  } catch (error) {
+    console.error('Google callback error:', error.message)
+    return res.redirect(
+      `${clientOrigin}/login?error=${encodeURIComponent(
+        'An error occurred during Google sign-in. Please try again.',
+      )}`,
+    )
+  }
+}
+
 module.exports = {
   register,
   login,
@@ -612,4 +897,6 @@ module.exports = {
   resetPassword,
   verifyEmail,
   resendVerification,
+  googleAuth,
+  googleCallback,
 }

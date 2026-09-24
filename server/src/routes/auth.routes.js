@@ -9,6 +9,8 @@ const {
   resetPassword,
   verifyEmail,
   resendVerification,
+  googleAuth,
+  googleCallback,
 } = require('../controllers/auth.controller')
 
 const protect = require('../middleware/auth.middleware')
@@ -19,6 +21,18 @@ const {
 } = require('../middleware/rateLimiter.middleware')
 
 const router = express.Router()
+
+router.get(
+  '/google',
+  authLimiter,
+  googleAuth,
+)
+
+router.get(
+  '/google/callback',
+  authLimiter,
+  googleCallback,
+)
 
 router.post(
   '/register',
