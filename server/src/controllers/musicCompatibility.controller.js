@@ -1,4 +1,8 @@
+const mongoose = require('mongoose')
 const MusicProfile = require('../models/MusicProfile')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 const normalizeList = (items = []) =>
   items
@@ -28,6 +32,13 @@ const getMusicCompatibility = async (req, res) => {
   try {
     const currentUserId = req.user.userId
     const { userId } = req.params
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
 
     if (currentUserId === userId) {
       return res.status(400).json({
@@ -98,7 +109,7 @@ const getMusicCompatibility = async (req, res) => {
       },
     })
   } catch (error) {
-    console.error('Music compatibility error:', error)
+    console.error('Music compatibility error:', error.message)
 
     return res.status(500).json({
       success: false,
