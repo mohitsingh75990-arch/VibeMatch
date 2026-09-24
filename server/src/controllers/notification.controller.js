@@ -1,4 +1,8 @@
+const mongoose = require('mongoose')
 const Notification = require('../models/Notification')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 const getNotifications = async (req, res) => {
   try {
@@ -33,9 +37,18 @@ const getNotifications = async (req, res) => {
 
 const markNotificationRead = async (req, res) => {
   try {
+    const { notificationId } = req.params
+
+    if (!isValidObjectId(notificationId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid notification ID',
+      })
+    }
+
     const notification = await Notification.findOneAndUpdate(
       {
-        _id: req.params.notificationId,
+        _id: notificationId,
         recipient: req.user.userId,
       },
       {
@@ -85,7 +98,7 @@ const markAllNotificationsRead = async (req, res) => {
       message: 'All notifications marked as read',
     })
   } catch (error) {
-    console.error('Mark all notifications read error:', error)
+    console.error('Mark all notifications read error:', error.message)
 
     return res.status(500).json({
       success: false,
