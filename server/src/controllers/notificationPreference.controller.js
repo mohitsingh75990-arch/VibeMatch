@@ -29,7 +29,7 @@ const getNotificationPreferences = async (
   } catch (error) {
     console.error(
       'Get notification preferences error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({
@@ -109,7 +109,7 @@ const updateNotificationPreferences =
     } catch (error) {
       console.error(
         'Update notification preferences error:',
-        error,
+        error.message,
       )
 
       return res.status(500).json({
