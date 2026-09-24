@@ -156,6 +156,7 @@ function ProfilePreviewCard({
             <img
               src={photoUrl}
               alt={form.name || 'Profile'}
+              loading="lazy"
               className="h-full w-full object-cover"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
@@ -1254,6 +1255,7 @@ function Profile() {
                         form.name ||
                         'Profile'
                       }
+                      loading="lazy"
                       className="h-full w-full object-cover"
                       onError={() => {
                         setImagePreview('')
@@ -1388,6 +1390,7 @@ function Profile() {
                         <img
                           src={photoUrl}
                           alt={`Gallery photo ${slotIdx + 1}`}
+                          loading="lazy"
                           className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                         />
 

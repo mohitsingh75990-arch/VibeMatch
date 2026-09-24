@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import socket from '../services/socket'
@@ -24,7 +24,7 @@ const getImageUrl = (imagePath) => {
   return `${API_ORIGIN}${imagePath}`
 }
 
-function MatchPhotoCarousel({ user }) {
+const MatchPhotoCarousel = memo(function MatchPhotoCarousel({ user }) {
   const [photoIdx, setPhotoIdx] = useState(0)
 
   const photos =
@@ -61,6 +61,7 @@ function MatchPhotoCarousel({ user }) {
         <img
           src={imageUrl}
           alt={user.name}
+          loading="lazy"
           className="h-full w-full object-cover transition-all duration-300"
           onError={(event) => {
             event.currentTarget.style.display = 'none'
@@ -115,9 +116,9 @@ function MatchPhotoCarousel({ user }) {
           )}
         </>
       )}
-    </div>
+</div>
   )
-}
+})
 
 const formatLastSeen = (lastSeenDate) => {
   if (!lastSeenDate) return 'Offline'
@@ -263,20 +264,10 @@ function Matches() {
   // Real-time online/offline status
   useEffect(() => {
     const handleOnlineUsers = ({ userIds }) => {
-      console.log(
-        '🟢 Current online users:',
-        userIds,
-      )
-
       setOnlineUserIds(userIds || [])
     }
 
     const handleUserOnline = ({ userId }) => {
-      console.log(
-        '🟢 User came online:',
-        userId,
-      )
-
       setOnlineUserIds((currentIds) => {
         if (currentIds.includes(userId)) {
           return currentIds
@@ -287,11 +278,6 @@ function Matches() {
     }
 
     const handleUserOffline = ({ userId, lastSeen }) => {
-      console.log(
-        '⚪ User went offline:',
-        userId,
-      )
-
       setOnlineUserIds((currentIds) =>
         currentIds.filter((id) => id !== userId),
       )
@@ -323,17 +309,9 @@ function Matches() {
     // Ask backend for the latest online users
     // after the socket is already connected.
     if (socket.connected) {
-      console.log(
-        '🔄 Requesting current online users...',
-      )
-
       socket.emit('get_online_users')
     } else {
       const requestOnlineUsers = () => {
-        console.log(
-          '🔄 Socket connected. Requesting current online users...',
-        )
-
         socket.emit('get_online_users')
       }
 
@@ -610,7 +588,7 @@ function Matches() {
   ]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto max-w-6xl overflow-x-hidden px-4 py-8">
       {/* HEADER */}
       <div className="mb-8">
         <div className="rounded-3xl bg-gradient-to-r from-violet-600 to-pink-500 p-6 text-white shadow-lg">

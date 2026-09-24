@@ -364,14 +364,7 @@ function Chat() {
     markMessagesDelivered()
     markMessagesRead()
 
-    const interval = setInterval(() => {
-      loadMessages()
-      markMessagesDelivered()
-      markMessagesRead()
-    }, 10000)
-
     return () => {
-      clearInterval(interval)
 
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current)
@@ -534,6 +527,7 @@ function Chat() {
             <img
               src={profileImageUrl}
               alt={user?.name || 'Profile'}
+              loading="lazy"
               className="h-11 w-11 shrink-0 rounded-full object-cover sm:h-12 sm:w-12"
               onError={(event) => {
                 event.currentTarget.style.display = 'none'

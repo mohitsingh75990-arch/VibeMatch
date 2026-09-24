@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { getApiErrorMessage } from '../services/errors'
@@ -46,7 +46,7 @@ const VIBE_OPTIONS = [
   'Acoustic',
 ]
 
-function CandidatePhotoCarousel({ user }) {
+const CandidatePhotoCarousel = memo(function CandidatePhotoCarousel({ user }) {
   const [photoIdx, setPhotoIdx] = useState(0)
 
   const photos =
@@ -83,6 +83,7 @@ function CandidatePhotoCarousel({ user }) {
         <img
           src={imageUrl}
           alt={user.name}
+          loading="lazy"
           className="h-full w-full object-cover transition-all duration-300"
           onError={(event) => {
             event.currentTarget.style.display = 'none'
@@ -141,7 +142,7 @@ function CandidatePhotoCarousel({ user }) {
       )}
     </div>
   )
-}
+})
 
 function Discover() {
   const navigate = useNavigate()
