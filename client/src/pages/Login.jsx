@@ -129,6 +129,15 @@ function Login() {
                   autoComplete="current-password"
                   className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-fuchsia-400/60 focus:bg-white/[0.07] sm:px-4 sm:py-3.5"
                 />
+
+                <div className="mt-2 text-right">
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-fuchsia-400 hover:text-fuchsia-300 transition"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
               </div>
 
               {/* Login Button */}

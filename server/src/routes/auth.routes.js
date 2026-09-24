@@ -5,10 +5,18 @@ const {
   login,
   changePassword,
   deleteAccount,
+  forgotPassword,
+  resetPassword,
+  verifyEmail,
+  resendVerification,
 } = require('../controllers/auth.controller')
 
 const protect = require('../middleware/auth.middleware')
-const { authLimiter } = require('../middleware/rateLimiter.middleware')
+const {
+  authLimiter,
+  passwordResetLimiter,
+  emailVerificationLimiter,
+} = require('../middleware/rateLimiter.middleware')
 
 const router = express.Router()
 
@@ -28,6 +36,30 @@ router.post(
   '/login',
   authLimiter,
   login,
+)
+
+router.post(
+  '/forgot-password',
+  passwordResetLimiter,
+  forgotPassword,
+)
+
+router.post(
+  '/reset-password/:token',
+  passwordResetLimiter,
+  resetPassword,
+)
+
+router.get(
+  '/verify-email/:token',
+  emailVerificationLimiter,
+  verifyEmail,
+)
+
+router.post(
+  '/resend-verification',
+  emailVerificationLimiter,
+  resendVerification,
 )
 
 router.put(

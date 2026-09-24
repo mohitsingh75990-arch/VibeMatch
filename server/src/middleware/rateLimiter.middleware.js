@@ -27,7 +27,34 @@ const aiLimiter = rateLimit({
   },
 })
 
+const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  statusCode: 429,
+  message: {
+    success: false,
+    message: 'Too many password reset attempts. Please try again after 15 minutes.',
+  },
+})
+
+const emailVerificationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  statusCode: 429,
+  message: {
+    success: false,
+    message: 'Too many email verification attempts. Please try again after 15 minutes.',
+  },
+})
+
 module.exports = {
   authLimiter,
   aiLimiter,
+  passwordResetLimiter,
+  emailVerificationLimiter,
 }
+
