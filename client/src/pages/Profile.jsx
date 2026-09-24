@@ -2,6 +2,276 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 
+/* ─── Profile Completeness Bar ─────────────────────────────────────────── */
+function ProfileCompletenessBar({ profile, form, musicForm }) {
+  const steps = [
+    { label: 'Name', done: Boolean(form.name?.trim()) },
+    { label: 'Age', done: Boolean(form.age) },
+    { label: 'Gender', done: Boolean(form.gender) },
+    { label: 'Location', done: Boolean(form.location?.trim()) },
+    { label: 'Bio', done: form.bio?.trim().length >= 20 },
+    {
+      label: 'Photo',
+      done:
+        Boolean(profile?.profileImage) ||
+        (Array.isArray(profile?.photos) && profile.photos.length > 0),
+    },
+    {
+      label: 'Interests',
+      done:
+        (form.interests?.split(',').filter(Boolean).length || 0) >= 1,
+    },
+    {
+      label: 'Music',
+      done:
+        Boolean(musicForm?.favoriteArtists?.trim()) ||
+        Boolean(musicForm?.favoriteGenres?.trim()),
+    },
+    {
+      label: 'Vibe',
+      done: Array.isArray(musicForm?.vibeTags) && musicForm.vibeTags.length > 0,
+    },
+  ]
+
+  const done = steps.filter((s) => s.done).length
+  const pct = Math.round((done / steps.length) * 100)
+
+  const color =
+    pct === 100
+      ? 'bg-emerald-500'
+      : pct >= 66
+      ? 'bg-fuchsia-500'
+      : pct >= 33
+      ? 'bg-amber-500'
+      : 'bg-rose-500'
+
+  const label =
+    pct === 100
+      ? '✨ Profile complete!'
+      : pct >= 66
+      ? 'Looking good — almost there'
+      : pct >= 33
+      ? 'Add more details to stand out'
+      : 'Just getting started'
+
+  return (
+    <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl sm:mb-6 sm:rounded-3xl sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">
+            Profile completeness
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">{label}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-fuchsia-500/15 px-3 py-1.5 text-sm font-bold text-fuchsia-300">
+          {pct}%
+        </span>
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {steps.map((step) => (
+          <span
+            key={step.label}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+              step.done
+                ? 'bg-emerald-500/15 text-emerald-300'
+                : 'bg-white/5 text-slate-500'
+            }`}
+          >
+            {step.done ? '✓' : '○'} {step.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Profile Preview Card ──────────────────────────────────────────────── */
+function ProfilePreviewCard({ profile, form, musicForm, getImageUrl }) {
+  const photos =
+    Array.isArray(profile?.photos) && profile.photos.length > 0
+      ? [...profile.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+      : profile?.profileImage
+      ? [{ url: profile.profileImage, isPrimary: true }]
+      : []
+
+  const primaryPhoto =
+    photos.find((p) => p.isPrimary) || photos[0]
+  const photoUrl = primaryPhoto ? getImageUrl(primaryPhoto.url) : ''
+
+  const interests = (form.interests || '')
+    .split(',')
+    .map((i) => i.trim())
+    .filter(Boolean)
+    .slice(0, 6)
+
+  const genres = (form.favoriteGenres || '')
+    .split(',')
+    .map((g) => g.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+
+  const artists = (form.favoriteArtists || '')
+    .split(',')
+    .map((a) => a.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+
+  const vibeTags = Array.isArray(musicForm?.vibeTags)
+    ? musicForm.vibeTags.slice(0, 5)
+    : []
+
+  const hasContent =
+    form.name || photoUrl || form.bio || interests.length > 0 || genres.length > 0
+
+  if (!hasContent) return null
+
+  return (
+    <div className="mb-5 sm:mb-6">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-400 sm:text-sm">
+        Your Vibe Card
+      </p>
+      <p className="mb-3 text-xs text-slate-500">
+        This is how your profile appears to others when discovering.
+      </p>
+
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl sm:rounded-3xl">
+        {/* Photo */}
+        <div className="relative h-56 w-full overflow-hidden bg-gradient-to-br from-violet-100 to-pink-100 sm:h-64">
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt={form.name || 'Profile'}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center">
+              <span className="text-7xl">💜</span>
+            </div>
+          )}
+
+          {photos.length > 1 && (
+            <div className="absolute top-2 inset-x-2 flex gap-1">
+              {photos.map((p, idx) => (
+                <div
+                  key={p._id || idx}
+                  className={`h-1 flex-1 rounded-full ${
+                    idx === 0 ? 'bg-white' : 'bg-white/40'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+            <h3 className="text-xl font-bold text-white">
+              {form.name || 'Your name'}
+              {form.age ? `, ${form.age}` : ''}
+            </h3>
+            {form.location && (
+              <p className="text-xs text-white/80 mt-0.5">
+                📍 {form.location}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Card body */}
+        <div className="p-4 sm:p-5">
+          {form.bio && (
+            <p className="text-sm leading-6 text-slate-700 mb-4">
+              {form.bio.slice(0, 120)}
+              {form.bio.length > 120 ? '…' : ''}
+            </p>
+          )}
+
+          {interests.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Interests
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {interests.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {vibeTags.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Vibe
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {vibeTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-fuchsia-50 px-2.5 py-1 text-xs font-medium text-fuchsia-700"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {genres.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Music Genres
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {genres.map((g) => (
+                  <span
+                    key={g}
+                    className="rounded-full bg-pink-50 px-2.5 py-1 text-xs font-medium text-pink-700"
+                  >
+                    🎵 {g}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {artists.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Favorite Artists
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {artists.map((a) => (
+                  <span
+                    key={a}
+                    className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700"
+                  >
+                    🎤 {a}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const VIBE_TAGS = [
   'Romantic',
   'Chill',
@@ -726,6 +996,25 @@ function Profile() {
           </div>
         )}
 
+        {/* PROFILE COMPLETENESS */}
+        {profile && (
+          <ProfileCompletenessBar
+            profile={profile}
+            form={form}
+            musicForm={form}
+          />
+        )}
+
+        {/* VIBE CARD PREVIEW */}
+        {profile && (
+          <ProfilePreviewCard
+            profile={profile}
+            form={form}
+            musicForm={form}
+            getImageUrl={getImageUrl}
+          />
+        )}
+
         <div className="space-y-5 sm:space-y-6">
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <h2 className="text-lg font-semibold sm:text-xl">
@@ -1427,6 +1716,26 @@ function Profile() {
                 <p className="mt-2 text-xs text-slate-500">
                   Separate multiple interests with commas.
                 </p>
+
+                {form.interests
+                  .split(',')
+                  .map((i) => i.trim())
+                  .filter(Boolean).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {form.interests
+                      .split(',')
+                      .map((i) => i.trim())
+                      .filter(Boolean)
+                      .map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-slate-300"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
           </section>

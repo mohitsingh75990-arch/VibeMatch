@@ -738,6 +738,8 @@ const discoverUsers = async (
 
             photos: normalizePhotos(user),
 
+            vibeTags: userMusic?.vibeTags || [],
+
             vibeScore:
               compatibility.score,
 

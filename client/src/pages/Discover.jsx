@@ -1080,6 +1080,52 @@ function Discover() {
                     </div>
                   )}
 
+                  {/* VIBE TAGS */}
+
+                  {user.vibeTags?.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Vibe
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {user.vibeTags
+                          .slice(0, 4)
+                          .map((tag) => (
+                            <span
+                              key={tag}
+                              className="max-w-full break-words rounded-full bg-fuchsia-50 px-3 py-1 text-xs font-medium text-fuchsia-700"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* INTERESTS */}
+
+                  {user.interests?.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Interests
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {user.interests
+                          .slice(0, 5)
+                          .map((interest) => (
+                            <span
+                              key={interest}
+                              className="max-w-full break-words rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600"
+                            >
+                              {interest}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* ACTION BUTTONS */}
 
                   <div className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3">
