@@ -407,7 +407,7 @@ const getMatchExplanation = async (req, res) => {
       },
     })
   } catch (error) {
-    console.error('AI match explanation error:', error)
+    console.error('AI match explanation error:', error.message)
     return res.status(500).json({
       success: false,
       message: 'Unable to generate match explanation',
@@ -498,7 +498,7 @@ const getConversationStarters = async (req, res) => {
       icebreakers,
     })
   } catch (error) {
-    console.error('AI icebreakers error:', error)
+    console.error('AI icebreakers error:', error.message)
     return res.status(500).json({
       success: false,
       message: 'Unable to generate icebreakers',

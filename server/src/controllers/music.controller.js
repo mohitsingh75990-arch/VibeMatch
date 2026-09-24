@@ -28,7 +28,7 @@ const getMusicProfile = async (req, res) => {
       musicProfile,
     })
   } catch (error) {
-    console.error('Get music profile error:', error)
+    console.error('Get music profile error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -75,7 +75,7 @@ const updateMusicProfile = async (req, res) => {
       musicProfile,
     })
   } catch (error) {
-    console.error('Update music profile error:', error)
+    console.error('Update music profile error:', error.message)
 
     return res.status(500).json({
       success: false,

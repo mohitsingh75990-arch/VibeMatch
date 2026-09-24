@@ -125,7 +125,7 @@ const createInteraction = async (req, res) => {
       isMatch,
     })
   } catch (error) {
-    console.error('Create interaction error:', error)
+    console.error('Create interaction error:', error.message)
 
     return res.status(500).json({
       success: false,
