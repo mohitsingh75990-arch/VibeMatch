@@ -6,7 +6,7 @@ function AdminRoute() {
   const token = localStorage.getItem('vibematch_token')
 
   if (!token || !isAuthenticated) {
-    return <Navigate to="/login" replace />
+    return <Navigate to="/admin/login" replace />
   }
 
   if (!user?.isAdmin) {

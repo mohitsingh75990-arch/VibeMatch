@@ -175,12 +175,19 @@ function Login() {
           </div>
 
           {/* Back */}
-          <div className="mt-5 text-center sm:mt-6">
+          <div className="mt-5 flex items-center justify-center gap-3 text-xs text-slate-500 sm:mt-6 sm:text-sm">
             <Link
               to="/"
-              className="text-xs text-slate-500 transition hover:text-slate-300 sm:text-sm"
+              className="transition hover:text-slate-300"
             >
               ← Back to home
+            </Link>
+            <span>•</span>
+            <Link
+              to="/admin/login"
+              className="text-slate-600 transition hover:text-violet-400"
+            >
+              Admin Portal
             </Link>
           </div>
         </div>

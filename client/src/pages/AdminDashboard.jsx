@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 function AdminDashboard() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -72,6 +75,17 @@ function AdminDashboard() {
             >
               👥 Manage Users →
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                logout()
+                navigate('/admin/login')
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-800/80 px-3.5 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-700 hover:text-white"
+              title="Sign out of administrator session"
+            >
+              🚪 Sign Out
+            </button>
           </div>
         </div>
 
