@@ -8,28 +8,40 @@ const isSmtpConfigured = () => {
   )
 }
 
-const createTransporter = () => {
+let cachedTransporter = null
+
+const getTransporter = () => {
   if (!isSmtpConfigured()) {
+    cachedTransporter = null
     return null
+  }
+
+  if (cachedTransporter) {
+    return cachedTransporter
   }
 
   const port = Number(process.env.SMTP_PORT) || 587
   const secure = port === 465
 
-  return nodemailer.createTransport({
+  cachedTransporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
     secure,
+    pool: true,
+    connectionTimeout: 5000,
+    socketTimeout: 5000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
   })
+
+  return cachedTransporter
 }
 
 const sendMail = async ({ to, subject, html, text }) => {
   const isProduction = process.env.NODE_ENV === 'production'
-  const transporter = createTransporter()
+  const transporter = getTransporter()
 
   if (!transporter) {
     if (isProduction) {

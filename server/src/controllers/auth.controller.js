@@ -386,15 +386,13 @@ const forgotPassword = async (req, res) => {
       process.env.CLIENT_URL || 'http://localhost:5173'
     const resetUrl = `${clientOrigin}/reset-password/${rawToken}`
 
-    // Send email asynchronously (never throw error to client if sending fails, log only message)
-    try {
-      await sendPasswordResetEmail(user.email, resetUrl)
-    } catch (mailErr) {
+    // Send email asynchronously in background (never block HTTP response on SMTP completion)
+    sendPasswordResetEmail(user.email, resetUrl).catch((mailErr) => {
       console.error(
         'Forgot password mail delivery error:',
         mailErr.message,
       )
-    }
+    })
 
     return res.status(200).json(genericResponse)
   } catch (error) {
@@ -578,14 +576,13 @@ const resendVerification = async (req, res) => {
       process.env.CLIENT_URL || 'http://localhost:5173'
     const verifyUrl = `${clientOrigin}/verify-email/${rawToken}`
 
-    try {
-      await sendVerificationEmail(user.email, verifyUrl)
-    } catch (mailErr) {
+    // Send verification email asynchronously in background
+    sendVerificationEmail(user.email, verifyUrl).catch((mailErr) => {
       console.error(
         'Resend verification mail delivery error:',
         mailErr.message,
       )
-    }
+    })
 
     return res.status(200).json(genericResponse)
   } catch (error) {
