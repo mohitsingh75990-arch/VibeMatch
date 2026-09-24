@@ -163,6 +163,11 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    lastSeen: {
+      type: Date,
+      default: Date.now,
+    },
+
     emailVerificationToken: {
       type: String,
       select: false,

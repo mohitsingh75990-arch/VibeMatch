@@ -3,6 +3,37 @@ import { useNavigate, useParams } from 'react-router-dom'
 import api from '../services/api'
 import socket from '../services/socket'
 
+const formatLastSeen = (lastSeenDate) => {
+  if (!lastSeenDate) return 'Offline'
+  const time = new Date(lastSeenDate).getTime()
+  if (Number.isNaN(time)) return 'Offline'
+  const diff = Date.now() - time
+  if (diff < 60000) return 'Active just now'
+  if (diff < 3600000) return `Active ${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `Active ${Math.floor(diff / 3600000)}h ago`
+  return `Active ${new Date(lastSeenDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+}
+
+const formatDateSeparator = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) {
+    return 'Today'
+  }
+  if (date.toDateString() === yesterday.toDateString()) {
+    return 'Yesterday'
+  }
+  return date.toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+  })
+}
+
 function Chat() {
   const { userId } = useParams()
   const navigate = useNavigate()
@@ -15,6 +46,7 @@ function Chat() {
   const [error, setError] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isOnline, setIsOnline] = useState(false)
+  const [targetLastSeen, setTargetLastSeen] = useState(null)
   const [icebreakers, setIcebreakers] = useState([])
   const [icebreakersLoading, setIcebreakersLoading] = useState(false)
   const [showIcebreakers, setShowIcebreakers] = useState(true)
@@ -68,6 +100,9 @@ function Chat() {
     try {
       const response = await api.get(`/users/${userId}`)
       setUser(response.data.user)
+      if (response.data.user?.lastSeen) {
+        setTargetLastSeen(response.data.user.lastSeen)
+      }
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -218,10 +253,13 @@ function Chat() {
       }
     }
 
-    const handleUserOffline = ({ userId: offlineUserId }) => {
+    const handleUserOffline = ({ userId: offlineUserId, lastSeen }) => {
       if (offlineUserId === userId) {
         setIsOnline(false)
         setIsTyping(false)
+        if (lastSeen) {
+          setTargetLastSeen(lastSeen)
+        }
       }
     }
 
@@ -482,15 +520,20 @@ function Chat() {
               {user?.age ? `, ${user.age}` : ''}
             </h1>
 
-            <p className="text-sm text-slate-500">
+            <p className="text-xs sm:text-sm text-slate-500 flex items-center gap-1.5">
               {isTyping ? (
-                `${user?.name || 'They'} is typing...`
+                <span className="text-violet-600 font-medium animate-pulse">
+                  ✍️ typing...
+                </span>
               ) : isOnline ? (
-                <span className="text-emerald-600">
-                  🟢 Online
+                <span className="text-emerald-600 font-medium flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                  Online
                 </span>
               ) : (
-                <span>⚪ Offline</span>
+                <span className="text-slate-400">
+                  ⚪ {formatLastSeen(targetLastSeen || user?.lastSeen)}
+                </span>
               )}
             </p>
           </div>
@@ -506,12 +549,16 @@ function Chat() {
 
             {!loading && messages.length === 0 && (
               <div className="m-auto text-center px-4 py-6 max-w-md">
-                <p className="text-lg font-semibold text-slate-700">
-                  Start the conversation 💜
+                <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-violet-100 to-fuchsia-100 text-3xl shadow-sm">
+                  💜
+                </div>
+
+                <p className="text-lg font-bold text-slate-800">
+                  Start your vibe with {user?.name || 'your match'} ✨
                 </p>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Say hello to your match.
+                  Break the ice, talk music, or send an AI suggestion below.
                 </p>
 
                 {icebreakersLoading ? (
@@ -555,73 +602,92 @@ function Chat() {
               </div>
             )}
 
-            {messages.map((message) => {
+            {messages.map((message, index) => {
               const isMine = message.sender?._id !== userId
               const status = getMessageStatus(message)
+              const prevMessage = index > 0 ? messages[index - 1] : null
+              const showDateSeparator =
+                !prevMessage ||
+                new Date(message.createdAt).toDateString() !==
+                  new Date(prevMessage.createdAt).toDateString()
 
               return (
-                <div
-                  key={message._id}
-                  className={`flex ${
-                    isMine
-                      ? 'justify-end'
-                      : 'justify-start'
-                  }`}
-                >
+                <div key={message._id} className="space-y-3">
+                  {showDateSeparator && (
+                    <div className="flex justify-center my-2">
+                      <span className="rounded-full bg-slate-200/80 px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-2xs">
+                        {formatDateSeparator(message.createdAt)}
+                      </span>
+                    </div>
+                  )}
+
                   <div
-                    className={`max-w-[80%] rounded-2xl px-4 py-3 sm:max-w-[75%] ${
-                      isMine
-                        ? 'rounded-br-md bg-violet-600 text-white'
-                        : 'rounded-bl-md bg-slate-100 text-slate-800'
+                    className={`flex ${
+                      isMine ? 'justify-end' : 'justify-start'
                     }`}
                   >
-                    <p className="break-words text-sm">
-                      {message.text}
-                    </p>
-
-                    <div className="mt-1 flex items-center justify-end gap-1">
-                      <p
-                        className={`text-[10px] ${
-                          isMine
-                            ? 'text-violet-200'
-                            : 'text-slate-400'
-                        }`}
-                      >
-                        {new Date(
-                          message.createdAt,
-                        ).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-4 py-3 sm:max-w-[75%] shadow-xs ${
+                        isMine
+                          ? 'rounded-br-md bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white'
+                          : 'rounded-bl-md bg-white border border-slate-200/70 text-slate-800'
+                      }`}
+                    >
+                      <p className="break-words text-sm leading-relaxed">
+                        {message.text}
                       </p>
 
-                      {status && (
+                      <div className="mt-1 flex items-center justify-end gap-1.5">
                         <span
-                          className={`text-[11px] font-semibold ${
-                            status === 'read'
-                              ? 'text-sky-300'
-                              : isMine
-                                ? 'text-violet-200'
-                                : 'text-slate-400'
+                          className={`text-[10px] ${
+                            isMine ? 'text-white/70' : 'text-slate-400'
                           }`}
-                          title={
-                            status === 'read'
-                              ? 'Read'
-                              : status === 'delivered'
+                        >
+                          {new Date(message.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+
+                        {status && (
+                          <span
+                            className={`text-[11px] font-bold ${
+                              status === 'read'
+                                ? 'text-sky-300'
+                                : isMine
+                                ? 'text-white/70'
+                                : 'text-slate-400'
+                            }`}
+                            title={
+                              status === 'read'
+                                ? 'Read'
+                                : status === 'delivered'
                                 ? 'Delivered'
                                 : 'Sent'
-                          }
-                        >
-                          {status === 'sent'
-                            ? '✓'
-                            : '✓✓'}
-                        </span>
-                      )}
+                            }
+                          >
+                            {status === 'sent' ? '✓' : '✓✓'}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
               )
             })}
+
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-1.5 rounded-2xl rounded-bl-md bg-white border border-slate-200/70 px-4 py-2.5 text-slate-500 shadow-xs">
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-violet-400 [animation-delay:-0.3s]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-violet-500 [animation-delay:-0.15s]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-violet-600" />
+                  <span className="ml-1 text-xs text-slate-400">
+                    {user?.name || 'They'} is typing...
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div ref={messagesEndRef} />
           </div>

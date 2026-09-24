@@ -6,6 +6,7 @@ const { Server } = require('socket.io')
 const app = require('./app')
 const connectDatabase = require('./config/database')
 const { setSocketIO } = require('./services/socket')
+const User = require('./models/User')
 
 const PORT = process.env.PORT || 5000
 
@@ -77,9 +78,15 @@ io.on('connection', (socket) => {
 
       if (remainingPreviousConnections === 0) {
         onlineUsers.delete(previousUserId)
+        const lastSeen = new Date()
 
         io.emit('user_offline', {
           userId: previousUserId,
+          lastSeen: lastSeen.toISOString(),
+        })
+
+        User.findByIdAndUpdate(previousUserId, { lastSeen }).catch((err) => {
+          console.error('Error updating lastSeen for previous user:', err.message)
         })
       } else {
         onlineUsers.set(
@@ -91,6 +98,10 @@ io.on('connection', (socket) => {
 
     socket.userId = userId
     socket.join(`user:${userId}`)
+
+    User.findByIdAndUpdate(userId, { lastSeen: new Date() }).catch((err) => {
+      console.error('Error updating lastSeen on join:', err.message)
+    })
 
     const currentConnections =
       onlineUsers.get(userId) || 0
@@ -157,9 +168,15 @@ io.on('connection', (socket) => {
 
       if (remainingConnections === 0) {
         onlineUsers.delete(userId)
+        const lastSeen = new Date()
 
         io.emit('user_offline', {
           userId,
+          lastSeen: lastSeen.toISOString(),
+        })
+
+        User.findByIdAndUpdate(userId, { lastSeen }).catch((err) => {
+          console.error('Error updating lastSeen on disconnect:', err.message)
         })
 
         console.log(

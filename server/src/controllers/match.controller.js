@@ -5,6 +5,25 @@ const User = require('../models/User')
 const isValidObjectId = (id) =>
   Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
+const normalizePhotos = (user) => {
+  if (user && user.photos && user.photos.length > 0) {
+    return [...user.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+  }
+
+  if (user && user.profileImage) {
+    return [
+      {
+        _id: 'legacy-primary',
+        url: user.profileImage,
+        isPrimary: true,
+        order: 0,
+      },
+    ]
+  }
+
+  return []
+}
+
 const getMatches = async (req, res) => {
   try {
     const currentUserId = req.user.userId
@@ -44,10 +63,17 @@ const getMatches = async (req, res) => {
       },
     }).select('-password')
 
+    const formattedMatches = matches.map((matchUser) => {
+      const userObj = matchUser.toObject ? matchUser.toObject() : { ...matchUser }
+      userObj.photos = normalizePhotos(matchUser)
+      delete userObj.password
+      return userObj
+    })
+
     return res.status(200).json({
       success: true,
-      count: matches.length,
-      matches,
+      count: formattedMatches.length,
+      matches: formattedMatches,
     })
   } catch (error) {
     console.error('Get matches error:', error.message)

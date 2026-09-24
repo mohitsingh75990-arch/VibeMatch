@@ -23,11 +23,119 @@ const getImageUrl = (imagePath) => {
   return `${API_ORIGIN}${imagePath}`
 }
 
+function MatchPhotoCarousel({ user }) {
+  const [photoIdx, setPhotoIdx] = useState(0)
+
+  const photos =
+    Array.isArray(user.photos) && user.photos.length > 0
+      ? [...user.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+      : user.profileImage
+      ? [{ url: user.profileImage }]
+      : []
+
+  if (photos.length === 0) {
+    return (
+      <div className="flex h-72 items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100">
+        <span className="text-7xl">💜</span>
+      </div>
+    )
+  }
+
+  const currentPhoto = photos[photoIdx] || photos[0]
+  const imageUrl = getImageUrl(currentPhoto?.url)
+
+  const handlePrev = (e) => {
+    e.stopPropagation()
+    setPhotoIdx((prev) => (prev > 0 ? prev - 1 : prev))
+  }
+
+  const handleNext = (e) => {
+    e.stopPropagation()
+    setPhotoIdx((prev) => (prev < photos.length - 1 ? prev + 1 : prev))
+  }
+
+  return (
+    <div className="group relative h-72 w-full overflow-hidden bg-slate-900 select-none">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={user.name}
+          className="h-full w-full object-cover transition-all duration-300"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+            event.currentTarget.nextElementSibling?.classList.remove('hidden')
+          }}
+        />
+      ) : null}
+
+      <div
+        className={`flex h-full items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100 ${
+          imageUrl ? 'hidden' : ''
+        }`}
+      >
+        <span className="text-7xl">💜</span>
+      </div>
+
+      {photos.length > 1 && (
+        <>
+          <div className="absolute top-2 inset-x-2 z-10 flex gap-1 px-1">
+            {photos.map((p, idx) => (
+              <div
+                key={p._id || idx}
+                className={`h-1 flex-1 rounded-full transition-all duration-200 ${
+                  idx === photoIdx
+                    ? 'bg-white shadow-xs'
+                    : 'bg-white/40 backdrop-blur-xs'
+                }`}
+              />
+            ))}
+          </div>
+
+          {photoIdx > 0 && (
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md opacity-80 hover:opacity-100 hover:scale-105 transition"
+              aria-label="Previous photo"
+            >
+              ‹
+            </button>
+          )}
+
+          {photoIdx < photos.length - 1 && (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md opacity-80 hover:opacity-100 hover:scale-105 transition"
+              aria-label="Next photo"
+            >
+              ›
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+const formatLastSeen = (lastSeenDate) => {
+  if (!lastSeenDate) return 'Offline'
+  const time = new Date(lastSeenDate).getTime()
+  if (Number.isNaN(time)) return 'Offline'
+  const diff = Date.now() - time
+  if (diff < 60000) return 'Active just now'
+  if (diff < 3600000) return `Active ${Math.floor(diff / 60000)}m ago`
+  if (diff < 86400000) return `Active ${Math.floor(diff / 3600000)}h ago`
+  return `Active ${new Date(lastSeenDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+}
+
 function Matches() {
   const navigate = useNavigate()
 
   const [matches, setMatches] = useState([])
   const [onlineUserIds, setOnlineUserIds] = useState([])
+  const [lastSeenMap, setLastSeenMap] = useState({})
+  const [unmatchingId, setUnmatchingId] = useState(null)
   const [lastMessages, setLastMessages] = useState({})
   const [compatibilityData, setCompatibilityData] = useState({})
   const [loading, setLoading] = useState(true)
@@ -164,7 +272,7 @@ function Matches() {
       })
     }
 
-    const handleUserOffline = ({ userId }) => {
+    const handleUserOffline = ({ userId, lastSeen }) => {
       console.log(
         '⚪ User went offline:',
         userId,
@@ -173,6 +281,13 @@ function Matches() {
       setOnlineUserIds((currentIds) =>
         currentIds.filter((id) => id !== userId),
       )
+
+      if (lastSeen) {
+        setLastSeenMap((prev) => ({
+          ...prev,
+          [userId]: lastSeen,
+        }))
+      }
     }
 
     // Register listeners first
@@ -284,7 +399,7 @@ function Matches() {
 
   const handleUnmatch = async (userId, userName) => {
     const confirmed = window.confirm(
-      `Are you sure you want to unmatch ${userName}?`,
+      `Are you sure you want to unmatch ${userName}? This will remove your match and chat.`,
     )
 
     if (!confirmed) {
@@ -292,6 +407,7 @@ function Matches() {
     }
 
     try {
+      setUnmatchingId(userId)
       setError('')
 
       await api.delete(`/matches/${userId}`)
@@ -302,6 +418,8 @@ function Matches() {
         err.response?.data?.message ||
           'Unable to unmatch user',
       )
+    } finally {
+      setUnmatchingId(null)
     }
   }
 
@@ -567,10 +685,6 @@ function Matches() {
             const compatibility =
               compatibilityData[user._id]
 
-            const imageUrl = getImageUrl(
-              user.profileImage,
-            )
-
             const isOnline =
               onlineUserIds.includes(user._id)
 
@@ -579,40 +693,16 @@ function Matches() {
                 key={user._id}
                 className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-1 hover:shadow-lg"
               >
-                {/* PROFILE IMAGE */}
+                {/* PROFILE IMAGE / CAROUSEL */}
                 <div className="relative">
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={user.name}
-                      className="h-72 w-full object-cover"
-                      onError={(event) => {
-                        event.currentTarget.style.display =
-                          'none'
-
-                        event.currentTarget.nextElementSibling?.classList.remove(
-                          'hidden',
-                        )
-                      }}
-                    />
-                  ) : null}
-
-                  <div
-                    className={`flex h-72 items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100 ${
-                      imageUrl ? 'hidden' : ''
-                    }`}
-                  >
-                    <span className="text-7xl">
-                      💜
-                    </span>
-                  </div>
+                  <MatchPhotoCarousel user={user} />
 
                   {/* ONLINE STATUS */}
-                  <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur">
+                  <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold shadow-sm backdrop-blur">
                     <span
                       className={`h-2.5 w-2.5 rounded-full ${
                         isOnline
-                          ? 'bg-green-500'
+                          ? 'bg-emerald-500 animate-pulse'
                           : 'bg-slate-300'
                       }`}
                     />
@@ -620,18 +710,18 @@ function Matches() {
                     <span
                       className={
                         isOnline
-                          ? 'text-green-600'
+                          ? 'text-emerald-700'
                           : 'text-slate-500'
                       }
                     >
                       {isOnline
                         ? 'Online'
-                        : 'Offline'}
+                        : formatLastSeen(lastSeenMap[user._id] || user.lastSeen)}
                     </span>
                   </div>
 
                   {/* MATCH BADGE */}
-                  <div className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-violet-700 shadow-sm backdrop-blur">
+                  <div className="absolute right-4 top-4 z-20 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-violet-700 shadow-sm backdrop-blur">
                     💜 Matched
                   </div>
                 </div>
@@ -658,7 +748,7 @@ function Matches() {
                         <span
                           className={`h-2 w-2 rounded-full ${
                             isOnline
-                              ? 'bg-green-500'
+                              ? 'bg-emerald-500'
                               : 'bg-slate-300'
                           }`}
                         />
@@ -666,17 +756,49 @@ function Matches() {
                         <span
                           className={`text-xs font-medium ${
                             isOnline
-                              ? 'text-green-600'
+                              ? 'text-emerald-600'
                               : 'text-slate-400'
                           }`}
                         >
                           {isOnline
                             ? 'Online now'
-                            : 'Offline'}
+                            : formatLastSeen(lastSeenMap[user._id] || user.lastSeen)}
                         </span>
                       </div>
                     </div>
                   </div>
+
+                  {/* SHARED MUSIC & INTERESTS CHIPS */}
+                  {(user.favoriteArtists?.length > 0 ||
+                    user.favoriteGenres?.length > 0 ||
+                    user.interests?.length > 0) && (
+                    <div className="mt-3.5 flex flex-wrap gap-1.5">
+                      {user.favoriteArtists?.slice(0, 2).map((artist) => (
+                        <span
+                          key={artist}
+                          className="rounded-full bg-violet-50 px-2.5 py-0.5 text-[11px] font-medium text-violet-700"
+                        >
+                          🎤 {artist}
+                        </span>
+                      ))}
+                      {user.favoriteGenres?.slice(0, 2).map((genre) => (
+                        <span
+                          key={genre}
+                          className="rounded-full bg-pink-50 px-2.5 py-0.5 text-[11px] font-medium text-pink-700"
+                        >
+                          🎵 {genre}
+                        </span>
+                      ))}
+                      {user.interests?.slice(0, 2).map((interest) => (
+                        <span
+                          key={interest}
+                          className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600"
+                        >
+                          🌍 {interest}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* BIO */}
                   {user.bio && (
@@ -824,15 +946,16 @@ function Matches() {
 
                     <button
                       type="button"
+                      disabled={unmatchingId === user._id}
                       onClick={() =>
                         handleUnmatch(
                           user._id,
                           user.name,
                         )
                       }
-                      className="rounded-full border border-red-200 px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50"
+                      className="rounded-full border border-red-200 px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                     >
-                      Unmatch
+                      {unmatchingId === user._id ? 'Unmatching...' : 'Unmatch'}
                     </button>
 
                     <button
