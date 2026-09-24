@@ -1,6 +1,7 @@
 require('dotenv').config()
 
 const http = require('http')
+const mongoose = require('mongoose')
 const { Server } = require('socket.io')
 const jwt = require('jsonwebtoken')
 
@@ -174,3 +175,35 @@ server.listen(PORT, () => {
     `VibeMatch API running on http://localhost:${PORT}`,
   )
 })
+
+// Graceful shutdown handling for container recycling / terminations
+let isShuttingDown = false
+
+const gracefulShutdown = (signal) => {
+  if (isShuttingDown) {
+    return
+  }
+  isShuttingDown = true
+  console.log(`Received ${signal}. Starting graceful shutdown...`)
+
+  server.close(async () => {
+    console.log('HTTP server closed.')
+    try {
+      await mongoose.disconnect()
+      console.log('MongoDB connection closed.')
+      process.exit(0)
+    } catch (err) {
+      console.error('Error during database disconnection:', err.message)
+      process.exit(1)
+    }
+  })
+
+  // Force termination if connections fail to drain within 10 seconds
+  setTimeout(() => {
+    console.error('Forced shutdown: Timed out waiting for connections to close.')
+    process.exit(1)
+  }, 10000).unref()
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))

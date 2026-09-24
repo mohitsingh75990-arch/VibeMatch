@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
 
-const API_ORIGIN = import.meta.env.VITE_API_URL.replace(
+const API_ORIGIN = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(
   /\/api\/?$/,
   '',
 )

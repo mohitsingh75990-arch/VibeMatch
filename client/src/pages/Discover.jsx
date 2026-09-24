@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { getApiErrorMessage } from '../services/errors'
 
-const API_ORIGIN = import.meta.env.VITE_API_URL.replace(
-  /\/api\/?$/,
-  '',
-)
+const API_ORIGIN = (
+  import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+).replace(/\/api\/?$/, '')
 
 const getImageUrl = (imagePath) => {
   if (!imagePath) {
