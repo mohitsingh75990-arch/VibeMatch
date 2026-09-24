@@ -55,6 +55,13 @@ const sendMessage = async (req, res) => {
       })
     }
 
+    if (!isValidObjectId(receiver)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid receiver ID',
+      })
+    }
+
     if (receiver === sender) {
       return res.status(400).json({
         success: false,
