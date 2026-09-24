@@ -31,9 +31,20 @@ function Login() {
       const { token, user } = response.data
 
       login(user, token)
-
       navigate('/profile')
     } catch (error) {
+      if (error.response?.data?.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        navigate('/verify-email', {
+          state: {
+            email,
+            message:
+              error.response.data.message ||
+              'Please verify your email address before continuing.',
+          },
+        })
+        return
+      }
+
       setError(
         error.response?.data?.message ||
           'Unable to login. Please try again.',

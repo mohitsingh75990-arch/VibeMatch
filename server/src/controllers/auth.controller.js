@@ -55,20 +55,42 @@ const register = async (req, res) => {
     const hashedPassword =
       await bcrypt.hash(password, 12)
 
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(rawToken)
+      .digest('hex')
+
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       password: hashedPassword,
+      isEmailVerified: false,
+      emailVerificationToken: hashedToken,
+      emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+    })
+
+    const clientOrigin =
+      process.env.CLIENT_URL || 'http://localhost:5173'
+    const verifyUrl = `${clientOrigin}/verify-email/${rawToken}`
+
+    // Send verification email asynchronously in background
+    sendVerificationEmail(user.email, verifyUrl).catch((mailErr) => {
+      console.error(
+        'Registration verification email delivery error:',
+        mailErr.message,
+      )
     })
 
     return res.status(201).json({
       success: true,
-      message:
-        'User registered successfully',
+      code: 'EMAIL_VERIFICATION_REQUIRED',
+      message: 'Please verify your email address before continuing.',
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
+        isEmailVerified: false,
         isAdmin: false,
       },
     })
@@ -136,6 +158,16 @@ const login = async (req, res) => {
       })
     }
 
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        message: 'Please verify your email address before continuing.',
+        email: user.email,
+        isEmailVerified: false,
+      })
+    }
+
     const token = jwt.sign(
       {
         userId:
@@ -155,6 +187,7 @@ const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        isEmailVerified: true,
         isAdmin: Boolean(user.isAdmin),
       },
     })

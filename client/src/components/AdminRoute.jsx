@@ -9,6 +9,16 @@ function AdminRoute() {
     return <Navigate to="/admin/login" replace />
   }
 
+  if (user && user.isEmailVerified === false) {
+    return (
+      <Navigate
+        to="/verify-email"
+        replace
+        state={{ email: user.email }}
+      />
+    )
+  }
+
   if (!user?.isAdmin) {
     return <Navigate to="/discover" replace />
   }

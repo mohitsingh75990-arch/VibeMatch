@@ -49,14 +49,28 @@ function AdminLogin() {
         return
       }
 
+      if (!authenticatedUser?.isEmailVerified) {
+        setError(
+          'Email verification required. Administrator accounts must have a verified email address.',
+        )
+        setLoading(false)
+        return
+      }
+
       // Valid admin login - update authentication context
       login(authenticatedUser, token)
       navigate('/admin', { replace: true })
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          'Failed to authenticate. Please verify administrator credentials.',
-      )
+      if (err.response?.data?.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        setError(
+          'Email verification required. Please verify your email before accessing the administrator portal.',
+        )
+      } else {
+        setError(
+          err.response?.data?.message ||
+            'Failed to authenticate. Please verify administrator credentials.',
+        )
+      }
     } finally {
       setLoading(false)
     }

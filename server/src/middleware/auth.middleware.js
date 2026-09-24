@@ -17,7 +17,7 @@ const protect = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
 
     const user = await User.findById(decoded.userId).select(
-      'suspendedUntil mutedUntil isAdmin',
+      'isEmailVerified suspendedUntil mutedUntil isAdmin email',
     )
 
     if (!user) {
@@ -36,9 +36,21 @@ const protect = async (req, res, next) => {
       })
     }
 
+    // Email verification check: block access to protected application APIs if unverified
+    if (!user.isEmailVerified) {
+      return res.status(403).json({
+        success: false,
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        message:
+          'Please verify your email address before accessing the application.',
+      })
+    }
+
     req.user = {
       userId: decoded.userId,
+      email: user.email,
       isAdmin: Boolean(user.isAdmin),
+      isEmailVerified: Boolean(user.isEmailVerified),
       mutedUntil: user.mutedUntil || null,
     }
 

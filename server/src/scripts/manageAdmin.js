@@ -56,9 +56,10 @@ async function run() {
       )
     } else {
       user.isAdmin = true
+      user.isEmailVerified = true
       await user.save()
       console.log(
-        `[SUCCESS] Administrator privileges GRANTED to user: ${user.name} (${user.email})`,
+        `[SUCCESS] Administrator privileges GRANTED to user: ${user.name} (${user.email}) [verified: true]`,
       )
     }
 

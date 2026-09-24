@@ -36,13 +36,20 @@ function Signup() {
     setLoading(true)
 
     try {
-      await api.post('/auth/register', {
+      const response = await api.post('/auth/register', {
         name: formData.name,
         email: formData.email,
         password: formData.password,
       })
 
-      navigate('/login')
+      navigate('/verify-email', {
+        state: {
+          email: formData.email,
+          message:
+            response.data?.message ||
+            'Please verify your email address before continuing.',
+        },
+      })
     } catch (error) {
       setError(
         error.response?.data?.message ||
