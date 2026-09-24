@@ -6,10 +6,11 @@ const {
   markMessagesRead,
 } = require('../controllers/message.controller')
 const protect = require('../middleware/auth.middleware')
+const { messageLimiter } = require('../middleware/rateLimiter.middleware')
 
 const router = express.Router()
 
-router.post('/', protect, sendMessage)
+router.post('/', protect, messageLimiter, sendMessage)
 
 // Read receipt routes must come before /:userId
 router.put(

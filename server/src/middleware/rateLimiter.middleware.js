@@ -55,10 +55,27 @@ const emailVerificationLimiter = rateLimit({
   },
 })
 
+const messageLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // 60 messages per minute per authenticated user/IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  statusCode: 429,
+  trustProxy: true,
+  keyGenerator: (req, res) => {
+    return req.user?.userId ? String(req.user.userId) : ipKeyGenerator(req, res)
+  },
+  message: {
+    success: false,
+    message: 'Too many messages sent. Please slow down and try again shortly.',
+  },
+})
+
 module.exports = {
   authLimiter,
   aiLimiter,
   passwordResetLimiter,
   emailVerificationLimiter,
+  messageLimiter,
 }
 

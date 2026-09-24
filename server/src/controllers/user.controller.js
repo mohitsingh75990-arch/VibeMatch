@@ -20,7 +20,8 @@ const {
 } = require('./compatibility.controller')
 
 const escapeRegex = (string = '') => {
-  return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (typeof string !== 'string') return ''
+  return string.slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 const normalizePhotos = (user) => {
@@ -654,19 +655,21 @@ const discoverUsers = async (
     const userCity = currentUser.location?.trim()
 
     if (isSameCity && userCity) {
+      const safeCity = escapeRegex(userCity)
       userQuery.location = {
-        $regex: escapeRegex(userCity),
+        $regex: `^${safeCity}(?:,\\s*.*)?$`,
         $options: 'i',
       }
-    } else if (location?.trim()) {
+    } else if (location && typeof location === 'string' && location.trim()) {
+      const safeLocation = escapeRegex(location.trim())
       userQuery.location = {
-        $regex: escapeRegex(location.trim()),
+        $regex: `^${safeLocation}(?:,\\s*.*)?$`,
         $options: 'i',
       }
     }
 
-    if (genre?.trim()) {
-      const safeGenre = escapeRegex(genre.trim())
+    if (genre && typeof genre === 'string' && genre.trim()) {
+      const safeGenre = escapeRegex(genre.trim().slice(0, 50))
       const genreRegex = new RegExp(`^${safeGenre}$`, 'i')
 
       const matchingMusicProfiles = await MusicProfile.find({
@@ -797,8 +800,8 @@ const discoverUsers = async (
       })
     }
 
-    if (vibeTag?.trim()) {
-      const normVibe = vibeTag.trim().toLowerCase()
+    if (vibeTag && typeof vibeTag === 'string' && vibeTag.trim()) {
+      const normVibe = vibeTag.trim().toLowerCase().slice(0, 50)
       usersWithCompatibility = usersWithCompatibility.filter((user) => {
         const profile = musicMap.get(user._id.toString())
         const tags = (profile?.vibeTags || []).map((t) =>

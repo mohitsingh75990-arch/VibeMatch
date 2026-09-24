@@ -25,10 +25,53 @@ const app = express()
 app.set('trust proxy', 1)
 
 // Production-safe security headers with helmet
+const isProduction = process.env.NODE_ENV === 'production'
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
-    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'blob:',
+          'https://res.cloudinary.com',
+          'https://*.cloudinary.com',
+          'https://i.scdn.co',
+          'https://*.scdn.co',
+          'https://*.spotifycdn.com',
+        ],
+        connectSrc: [
+          "'self'",
+          'https:',
+          'http:',
+          'ws:',
+          'wss:',
+        ],
+        fontSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'", 'https://res.cloudinary.com', 'https://*.scdn.co'],
+        frameSrc: ["'self'", 'https://accounts.spotify.com'],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: isProduction ? [] : null,
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: {
+      action: 'deny',
+    },
+    referrerPolicy: {
+      policy: 'strict-origin-when-cross-origin',
+    },
   }),
 )
 
@@ -36,10 +79,14 @@ app.use(
 app.use(cors(corsOptions))
 app.use(express.json())
 
-// Serve uploaded profile images
+// Serve uploaded profile images (with directory listing disabled and dotfiles ignored)
 app.use(
   '/uploads',
-  express.static(path.join(__dirname, '../uploads')),
+  express.static(path.join(__dirname, '../uploads'), {
+    dotfiles: 'ignore',
+    index: false,
+    maxAge: '1d',
+  }),
 )
 
 app.use('/api/auth', authRoutes)
