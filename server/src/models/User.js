@@ -168,6 +168,28 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    moderationStatus: {
+      type: String,
+      enum: ['active', 'warned', 'muted', 'suspended'],
+      default: 'active',
+    },
+
+    warningCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    mutedUntil: {
+      type: Date,
+      default: null,
+    },
+
+    suspendedUntil: {
+      type: Date,
+      default: null,
+    },
+
     lastSeen: {
       type: Date,
       default: Date.now,

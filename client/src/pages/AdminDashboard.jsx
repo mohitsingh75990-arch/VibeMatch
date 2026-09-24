@@ -61,6 +61,12 @@ function AdminDashboard() {
               🔄 Refresh
             </button>
             <Link
+              to="/admin/reports"
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20"
+            >
+              🛡️ Moderation {stats?.pendingReports > 0 ? `(${stats.pendingReports})` : ''}
+            </Link>
+            <Link
               to="/admin/users"
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-pink-600 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:from-violet-500 hover:to-pink-500"
             >
@@ -166,6 +172,31 @@ function AdminDashboard() {
               <p className="mt-1 text-xs text-slate-400">Joined within past week</p>
             </div>
           </div>
+
+          {/* Card: Pending Reports */}
+          <Link
+            to="/admin/reports?status=pending"
+            className="group relative overflow-hidden rounded-2xl border border-rose-500/30 bg-rose-500/10 p-6 shadow-sm transition hover:border-rose-500/50 hover:bg-rose-500/20"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-rose-300">Pending Reports</span>
+              <span className="rounded-lg bg-rose-500/20 p-2 text-lg text-rose-400">
+                🚨
+              </span>
+            </div>
+            <div className="mt-4">
+              {loading ? (
+                <div className="h-8 w-20 animate-pulse rounded bg-slate-700" />
+              ) : (
+                <div className="text-3xl font-extrabold text-rose-400">
+                  {stats?.pendingReports?.toLocaleString() ?? 0}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-rose-300/80 group-hover:underline">
+                Requires admin review →
+              </p>
+            </div>
+          </Link>
         </div>
 
         {/* Quick Links & Info Section */}
@@ -173,7 +204,7 @@ function AdminDashboard() {
           <div className="rounded-2xl border border-slate-800 bg-slate-800/40 p-6 lg:col-span-2">
             <h2 className="text-lg font-bold text-white">Administrative Actions</h2>
             <p className="mt-1 text-sm text-slate-400">
-              Access the user directory to inspect accounts, view music compatibility details, and manage records.
+              Access the user directory to inspect accounts, or review user reports and issue moderation warnings/suspensions.
             </p>
             <div className="mt-6 flex flex-wrap gap-4">
               <Link
@@ -181,6 +212,12 @@ function AdminDashboard() {
                 className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-violet-500"
               >
                 Go to User Directory →
+              </Link>
+              <Link
+                to="/admin/reports"
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-5 py-2.5 text-sm font-semibold text-rose-300 shadow-md transition hover:bg-rose-500/20"
+              >
+                Review Flagged Reports →
               </Link>
               <Link
                 to="/discover"

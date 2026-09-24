@@ -21,6 +21,7 @@ const Safety = lazy(() => import('./pages/Safety'))
 const Settings = lazy(() => import('./pages/Settings'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
+const AdminReports = lazy(() => import('./pages/AdminReports'))
 
 function App() {
   return (
@@ -123,6 +124,14 @@ function App() {
             element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" /></div>}>
                 <AdminUsers />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/reports"
+            element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" /></div>}>
+                <AdminReports />
               </Suspense>
             }
           />

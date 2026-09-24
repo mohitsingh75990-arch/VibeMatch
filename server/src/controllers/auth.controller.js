@@ -128,6 +128,14 @@ const login = async (req, res) => {
       })
     }
 
+    if (user.suspendedUntil && user.suspendedUntil > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: `Account is temporarily suspended until ${user.suspendedUntil.toISOString()}`,
+        suspendedUntil: user.suspendedUntil,
+      })
+    }
+
     const token = jwt.sign(
       {
         userId:

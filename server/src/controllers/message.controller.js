@@ -69,6 +69,14 @@ const sendMessage = async (req, res) => {
       })
     }
 
+    if (req.user?.mutedUntil && new Date(req.user.mutedUntil) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        message: `You are temporarily muted from sending messages until ${new Date(req.user.mutedUntil).toISOString()}`,
+        mutedUntil: req.user.mutedUntil,
+      })
+    }
+
     const blocked = await areBlocked(sender, receiver)
 
     if (blocked) {
