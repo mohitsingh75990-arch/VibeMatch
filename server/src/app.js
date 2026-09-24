@@ -18,6 +18,7 @@ const notificationPreferenceRoutes =
 const blockRoutes = require('./routes/block.routes')
 const reportRoutes = require('./routes/report.routes')
 const aiRoutes = require('./routes/ai.routes')
+const adminRoutes = require('./routes/admin.routes')
 
 const app = express()
 
@@ -108,6 +109,7 @@ app.use(
 app.use('/api/blocks', blockRoutes)
 app.use('/api/reports', reportRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/admin', adminRoutes)
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({

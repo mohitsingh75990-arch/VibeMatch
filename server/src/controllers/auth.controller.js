@@ -13,6 +13,7 @@ const {
   sendPasswordResetEmail,
   sendVerificationEmail,
 } = require('../utils/mailer')
+const cascadeDeleteUser = require('../utils/cascadeDeleteUser')
 
 
 const register = async (req, res) => {
@@ -68,6 +69,7 @@ const register = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        isAdmin: false,
       },
     })
   } catch (error) {
@@ -145,6 +147,7 @@ const login = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        isAdmin: Boolean(user.isAdmin),
       },
     })
   } catch (error) {
@@ -280,52 +283,13 @@ const deleteAccount = async (
       })
     }
 
-    // Remove the user's Cloudinary profile image if it is a Cloudinary asset.
-    // Never try to delete a legacy /uploads/... path from Cloudinary.
-    if (
-      user.profileImage &&
-      typeof user.profileImage === 'string' &&
-      user.profileImage.includes('res.cloudinary.com')
-    ) {
-      await deleteFromCloudinary(user.profileImage)
+    const deleted = await cascadeDeleteUser(userId)
+    if (!deleted) {
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to delete account',
+      })
     }
-
-    // Cascade-delete all user-owned data in parallel.
-    // Notes:
-    //  - Messages: deleted from both sides of the conversation (sender OR receiver).
-    //  - Notifications: removed where this user is the recipient OR the sender.
-    //  - Reports filed BY this user are deleted.
-    //  - Reports filed AGAINST this user are RETAINED for moderation/audit.
-    await Promise.all([
-      // Music profile
-      MusicProfile.deleteOne({ user: userId }),
-
-      // All interactions where this user liked/passed others, or was liked/passed
-      Interaction.deleteMany({
-        $or: [{ fromUser: userId }, { toUser: userId }],
-      }),
-
-      // All messages in all conversations this user participated in
-      Message.deleteMany({
-        $or: [{ sender: userId }, { receiver: userId }],
-      }),
-
-      // All notifications this user received or was listed as the sender in
-      Notification.deleteMany({
-        $or: [{ recipient: userId }, { sender: userId }],
-      }),
-
-      // All block relationships involving this user
-      Block.deleteMany({
-        $or: [{ blocker: userId }, { blocked: userId }],
-      }),
-
-      // Reports this user filed against others (their own submissions)
-      Report.deleteMany({ reporter: userId }),
-    ])
-
-    // Delete the user document last
-    await User.findByIdAndDelete(userId)
 
     return res.status(200).json({
       success: true,

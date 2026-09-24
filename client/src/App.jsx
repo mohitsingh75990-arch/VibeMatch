@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import MainLayout from './layouts/MainLayout'
 import ProtectedRoute from './components/ProtectedRoute'
+import AdminRoute from './components/AdminRoute'
 import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -18,6 +19,8 @@ const BlockedUsers = lazy(() => import('./pages/BlockedUsers'))
 const MyReports = lazy(() => import('./pages/MyReports'))
 const Safety = lazy(() => import('./pages/Safety'))
 const Settings = lazy(() => import('./pages/Settings'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 
 function App() {
   return (
@@ -101,6 +104,25 @@ function App() {
             element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" /></div>}>
                 <Settings />
+              </Suspense>
+            }
+          />
+        </Route>
+
+        <Route element={<AdminRoute />}>
+          <Route
+            path="/admin"
+            element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" /></div>}>
+                <AdminDashboard />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" /></div>}>
+                <AdminUsers />
               </Suspense>
             }
           />

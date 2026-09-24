@@ -66,10 +66,26 @@ const messageLimiter = rateLimit({
   },
 })
 
+const adminLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 120, // 120 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  statusCode: 429,
+  keyGenerator: (req, res) => {
+    return req.user?.userId ? String(req.user.userId) : ipKeyGenerator(req, res)
+  },
+  message: {
+    success: false,
+    message: 'Too many admin requests. Please slow down and try again later.',
+  },
+})
+
 module.exports = {
   authLimiter,
   aiLimiter,
   passwordResetLimiter,
   emailVerificationLimiter,
   messageLimiter,
+  adminLimiter,
 }

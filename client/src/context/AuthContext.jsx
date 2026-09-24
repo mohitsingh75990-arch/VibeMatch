@@ -5,6 +5,7 @@ import {
   useState,
 } from 'react'
 import socket from '../services/socket'
+import api from '../services/api'
 
 const AuthContext = createContext(null)
 
@@ -71,6 +72,27 @@ function AuthProvider({ children }) {
     setUser(null)
     setToken(null)
   }
+
+  // Silently sync user data (including isAdmin status) on mount/token change
+  useEffect(() => {
+    if (!token) return
+
+    api
+      .get('/users/me')
+      .then((res) => {
+        if (res.data?.user) {
+          const freshUser = res.data.user
+          setUser((prev) => {
+            const merged = { ...prev, ...freshUser }
+            localStorage.setItem('vibematch_user', JSON.stringify(merged))
+            return merged
+          })
+        }
+      })
+      .catch(() => {
+        // Silently ignore background refresh errors
+      })
+  }, [token])
 
   useEffect(() => {
     console.log(

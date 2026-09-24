@@ -117,6 +117,15 @@ function Navbar() {
                   ⚙️ Settings
                 </Link>
 
+                {user?.isAdmin && (
+                  <Link
+                    to="/admin"
+                    className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800"
+                  >
+                    ⚡ Admin
+                  </Link>
+                )}
+
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -216,6 +225,16 @@ function Navbar() {
                 >
                   ⚙️ Settings
                 </Link>
+
+                {user?.isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={closeMenu}
+                    className="rounded-xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700 hover:bg-violet-100"
+                  >
+                    ⚡ Admin Panel
+                  </Link>
+                )}
 
                 <button
                   type="button"
