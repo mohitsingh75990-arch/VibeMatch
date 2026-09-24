@@ -746,6 +746,15 @@ const discoverUsers = async (
             compatibilityBreakdown:
               compatibility.breakdown,
 
+            sharedHighlights:
+              compatibility.sharedHighlights,
+
+            whyYouVibe:
+              compatibility.whyYouVibe,
+
+            vibeSummary:
+              compatibility.summary,
+
             compatibilitySettings:
               compatibility.settings,
           }

@@ -963,13 +963,18 @@ function Discover() {
                   {/* COMPATIBILITY */}
 
                   {user.compatibilityBreakdown && (
-                    <div className="mt-5 rounded-2xl bg-slate-50 p-3 sm:p-4">
+                    <div className="mt-5 rounded-2xl bg-gradient-to-br from-violet-50/70 via-fuchsia-50/30 to-slate-50 p-3 sm:p-4 border border-violet-100/80">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-bold text-slate-800">
-                          {showSimilarMusic
-                            ? 'Why you match'
-                            : 'Interest compatibility'}
-                        </p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800">
+                            {user.vibeSummary || (showSimilarMusic ? 'Why you match' : 'Interest compatibility')}
+                          </p>
+                          {user.whyYouVibe && (
+                            <p className="mt-1 text-xs text-violet-700 leading-relaxed font-medium">
+                              ✨ {user.whyYouVibe}
+                            </p>
+                          )}
+                        </div>
 
                         {!showSimilarMusic && (
                           <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600">
@@ -977,6 +982,39 @@ function Discover() {
                           </span>
                         )}
                       </div>
+
+                      {/* MUTUAL SHARED HIGHLIGHTS */}
+                      {user.sharedHighlights &&
+                        (user.sharedHighlights.artists?.length > 0 ||
+                          user.sharedHighlights.genres?.length > 0 ||
+                          user.sharedHighlights.interests?.length > 0) && (
+                          <div className="mt-2.5 flex flex-wrap gap-1">
+                            {user.sharedHighlights.artists?.slice(0, 2).map((a) => (
+                              <span
+                                key={a}
+                                className="rounded-md bg-white/90 border border-violet-200/80 px-2 py-0.5 text-[10px] font-semibold text-violet-700"
+                              >
+                                🎤 {a}
+                              </span>
+                            ))}
+                            {user.sharedHighlights.genres?.slice(0, 2).map((g) => (
+                              <span
+                                key={g}
+                                className="rounded-md bg-white/90 border border-fuchsia-200/80 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-700"
+                              >
+                                🎵 {g}
+                              </span>
+                            ))}
+                            {user.sharedHighlights.interests?.slice(0, 2).map((i) => (
+                              <span
+                                key={i}
+                                className="rounded-md bg-white/90 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                              >
+                                🌟 {i}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                       <div
                         className={`mt-3 grid gap-2 ${

@@ -3,30 +3,62 @@ const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
 
+const normalizeToken = (str) => {
+  if (!str) return ''
+  return String(str)
+    .trim()
+    .toLowerCase()
+    .replace(/^the\s+/, '')
+    .replace(/[-_./]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /*
-  Helper: Extract unique common items between two arrays (case-insensitive)
+  Helper: Extract unique common items between two arrays (case-insensitive & token-normalized)
 */
 const getCommonItems = (listA = [], listB = []) => {
   if (!Array.isArray(listA) || !Array.isArray(listB)) {
     return []
   }
 
-  const setB = new Set(
-    listB
-      .map((item) => String(item).trim().toLowerCase())
-      .filter(Boolean),
-  )
+  const cleanListA = listA.map((i) => String(i || '').trim()).filter(Boolean)
+  const cleanListB = listB.map((i) => String(i || '').trim()).filter(Boolean)
+
+  const normalizedBMap = new Map()
+  cleanListB.forEach((orig) => {
+    const norm = normalizeToken(orig)
+    if (norm && !normalizedBMap.has(norm)) {
+      normalizedBMap.set(norm, orig)
+    }
+  })
 
   const common = []
-  const seen = new Set()
+  const matchedNormB = new Set()
 
-  for (const item of listA) {
-    const normalized = String(item).trim().toLowerCase()
-    if (normalized && setB.has(normalized) && !seen.has(normalized)) {
-      seen.add(normalized)
-      common.push(String(item).trim())
+  cleanListA.forEach((origA) => {
+    const normA = normalizeToken(origA)
+    if (!normA) return
+
+    if (normalizedBMap.has(normA) && !matchedNormB.has(normA)) {
+      common.push(origA)
+      matchedNormB.add(normA)
+      return
     }
-  }
+
+    for (const [normB] of normalizedBMap.entries()) {
+      if (
+        !matchedNormB.has(normB) &&
+        normA.length >= 3 &&
+        normB.length >= 3 &&
+        (normA.includes(normB) || normB.includes(normA))
+      ) {
+        common.push(origA)
+        matchedNormB.add(normB)
+        break
+      }
+    }
+  })
 
   return common
 }
@@ -98,7 +130,7 @@ const generateHeuristicExplanation = (
 
   if (commonGenres.length > 0) {
     explanationParts.push(
-      `Your taste connects through ${commonGenres.slice(0, 3).join(' and ')} sounds.`,
+      `Your musical taste connects naturally through ${commonGenres.slice(0, 3).join(' and ')} sounds.`,
     )
   }
 
@@ -110,7 +142,7 @@ const generateHeuristicExplanation = (
 
   if (commonInterests.length > 0) {
     explanationParts.push(
-      `Beyond music, you both enjoy ${commonInterests.slice(0, 3).join(', ')}.`,
+      `Beyond music, you both share passions in ${commonInterests.slice(0, 3).join(', ')}.`,
     )
   }
 
@@ -128,16 +160,27 @@ const generateHeuristicExplanation = (
 
   const explanation = explanationParts.join(' ')
 
-  // 3. Generate a personalized date / connection idea
+  // 3. Generate a personalized date / connection idea tailored to shared elements
   let dateIdea =
     'Plan a cozy coffee hangout and trade your current top 3 favorite songs with each other.'
 
+  const firstGenre = commonGenres[0]?.toLowerCase() || ''
+  const firstInterest = commonInterests[0]?.toLowerCase() || ''
+
   if (commonArtists.length > 0) {
-    dateIdea = `Grab coffee or drinks and listen to ${commonArtists[0]}'s greatest tracks, or check out upcoming local gigs together.`
+    dateIdea = `Grab coffee or drinks and listen to ${commonArtists[0]}'s greatest tracks, or check out an upcoming gig together.`
+  } else if (firstGenre.includes('jazz') || firstGenre.includes('blues')) {
+    dateIdea = `Visit an intimate speakeasy lounge or live acoustic jazz session to vibe over great music.`
+  } else if (firstGenre.includes('edm') || firstGenre.includes('dance') || firstGenre.includes('party')) {
+    dateIdea = `Check out a vibrant weekend dance lounge or outdoor DJ set together.`
+  } else if (firstGenre.includes('rock') || firstGenre.includes('indie')) {
+    dateIdea = `Explore a local vinyl record shop followed by coffee and music discussion.`
   } else if (commonGenres.length > 0) {
-    dateIdea = `Find an intimate local lounge or acoustic session that spins ${commonGenres[0]} tunes and vibe together.`
+    dateIdea = `Find a cozy lounge that spins ${commonGenres[0]} tracks and share your favorite underground playlists.`
+  } else if (firstInterest.includes('coffee') || firstInterest.includes('cafe')) {
+    dateIdea = `Meet at a specialty coffee spot and curate a mini 5-song collaborative playlist.`
   } else if (commonInterests.length > 0) {
-    dateIdea = `Plan an afternoon around ${commonInterests[0]} followed by a casual drive listening to each other's favorite playlists.`
+    dateIdea = `Plan an afternoon around ${commonInterests[0]} followed by a casual drive listening to each other's playlists.`
   }
 
   return {

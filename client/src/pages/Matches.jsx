@@ -150,6 +150,7 @@ function Matches() {
   const [aiInsight, setAiInsight] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [aiInsightsCache, setAiInsightsCache] = useState({})
 
   // Load matches
   useEffect(() => {
@@ -465,8 +466,15 @@ function Matches() {
 
   const openAiModal = async (targetUser) => {
     setAiModalUser(targetUser)
-    setAiInsight(null)
     setAiError('')
+
+    if (aiInsightsCache[targetUser._id]) {
+      setAiInsight(aiInsightsCache[targetUser._id])
+      setAiLoading(false)
+      return
+    }
+
+    setAiInsight(null)
     setAiLoading(true)
 
     try {
@@ -475,6 +483,10 @@ function Matches() {
       )
       if (response.data?.success) {
         setAiInsight(response.data)
+        setAiInsightsCache((prev) => ({
+          ...prev,
+          [targetUser._id]: response.data,
+        }))
       } else {
         setAiError('Unable to generate AI match explanation.')
       }
@@ -811,20 +823,53 @@ function Matches() {
                   {compatibility && (
                     <div className="mt-5 rounded-2xl bg-gradient-to-r from-violet-50 to-pink-50 p-4 ring-1 ring-violet-100">
                       <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            Vibe Compatibility
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-wide text-violet-700">
+                            {compatibility.summary || 'Vibe Compatibility'}
                           </p>
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            Music + interests
+                          <p className="mt-1 text-xs text-slate-600 font-medium">
+                            {compatibility.whyYouVibe || 'Music + interests match'}
                           </p>
                         </div>
 
-                        <span className="text-3xl font-bold text-violet-600">
+                        <span className="shrink-0 text-3xl font-bold text-violet-600">
                           {compatibility.score}%
                         </span>
                       </div>
+
+                      {/* MUTUAL SHARED HIGHLIGHTS */}
+                      {compatibility.sharedHighlights &&
+                        (compatibility.sharedHighlights.artists?.length > 0 ||
+                          compatibility.sharedHighlights.genres?.length > 0 ||
+                          compatibility.sharedHighlights.interests?.length > 0) && (
+                          <div className="mt-2.5 flex flex-wrap gap-1">
+                            {compatibility.sharedHighlights.artists?.slice(0, 2).map((a) => (
+                              <span
+                                key={a}
+                                className="rounded-md bg-white/90 border border-violet-200/80 px-2 py-0.5 text-[10px] font-semibold text-violet-700"
+                              >
+                                🎤 {a}
+                              </span>
+                            ))}
+                            {compatibility.sharedHighlights.genres?.slice(0, 2).map((g) => (
+                              <span
+                                key={g}
+                                className="rounded-md bg-white/90 border border-fuchsia-200/80 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-700"
+                              >
+                                🎵 {g}
+                              </span>
+                            ))}
+                            {compatibility.sharedHighlights.interests?.slice(0, 2).map((i) => (
+                              <span
+                                key={i}
+                                className="rounded-md bg-white/90 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+                              >
+                                🌟 {i}
+                              </span>
+                            ))}
+                          </div>
+                        )}
 
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
                         <div

@@ -6,64 +6,127 @@ const isValidObjectId = (id) =>
   Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 
-const calculateSimilarity = (
-  firstList = [],
-  secondList = [],
-) => {
-  const first = new Set(
-    firstList
-      .map((item) =>
-        String(item).trim().toLowerCase(),
-      )
-      .filter(Boolean),
-  )
-
-  const second = new Set(
-    secondList
-      .map((item) =>
-        String(item).trim().toLowerCase(),
-      )
-      .filter(Boolean),
-  )
-
-  if (
-    first.size === 0 ||
-    second.size === 0
-  ) {
-    return 0
-  }
-
-  let commonItems = 0
-
-  first.forEach((item) => {
-    if (second.has(item)) {
-      commonItems += 1
-    }
-  })
-
-  const totalUniqueItems =
-    new Set([
-      ...first,
-      ...second,
-    ]).size
-
-  return Math.round(
-    (commonItems /
-      totalUniqueItems) *
-      100,
-  )
+const normalizeToken = (str) => {
+  if (!str) return ''
+  return String(str)
+    .trim()
+    .toLowerCase()
+    .replace(/^the\s+/, '')
+    .replace(/[-_./]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 /*
-  Calculate compatibility.
+  Fuzzy and token-aware similarity calculation with shared item extraction.
+  Blends Sorensen-Dice and Overlap coefficient for balanced representation.
+*/
+const findMatchesAndScore = (listA = [], listB = []) => {
+  if (!Array.isArray(listA) || !Array.isArray(listB)) {
+    return { score: 0, common: [] }
+  }
 
-  showSimilarMusic controls whether
-  music-related compatibility factors
-  are included.
+  const cleanListA = listA.map((item) => String(item || '').trim()).filter(Boolean)
+  const cleanListB = listB.map((item) => String(item || '').trim()).filter(Boolean)
 
-  If music is disabled, the remaining
-  factors are automatically rebalanced
-  so the final score still ranges 0-100.
+  if (cleanListA.length === 0 || cleanListB.length === 0) {
+    return { score: 0, common: [] }
+  }
+
+  const normalizedBMap = new Map()
+  cleanListB.forEach((orig) => {
+    const norm = normalizeToken(orig)
+    if (norm && !normalizedBMap.has(norm)) {
+      normalizedBMap.set(norm, orig)
+    }
+  })
+
+  const common = []
+  const matchedNormB = new Set()
+
+  cleanListA.forEach((origA) => {
+    const normA = normalizeToken(origA)
+    if (!normA) return
+
+    // 1. Exact normalized match
+    if (normalizedBMap.has(normA)) {
+      common.push(origA)
+      matchedNormB.add(normA)
+      return
+    }
+
+    // 2. Substring / compound word match (e.g., "hip hop" vs "hip-hop", "indie rock" vs "rock")
+    for (const [normB] of normalizedBMap.entries()) {
+      if (
+        !matchedNormB.has(normB) &&
+        normA.length >= 3 &&
+        normB.length >= 3 &&
+        (normA.includes(normB) || normB.includes(normA))
+      ) {
+        common.push(origA)
+        matchedNormB.add(normB)
+        break
+      }
+    }
+  })
+
+  const uniqueA = new Set(cleanListA.map(normalizeToken).filter(Boolean))
+  const uniqueB = new Set(cleanListB.map(normalizeToken).filter(Boolean))
+
+  const countA = uniqueA.size
+  const countB = uniqueB.size
+  const matches = common.length
+
+  if (matches === 0 || countA === 0 || countB === 0) {
+    return { score: 0, common: [] }
+  }
+
+  // Overlap coefficient: matches / min(|A|, |B|)
+  const overlap = matches / Math.min(countA, countB)
+  // Dice coefficient: (2 * matches) / (|A| + |B|)
+  const dice = (2 * matches) / (countA + countB)
+
+  // Blend 60% overlap (rewards shared focal points) + 40% dice (rewards breadth)
+  const score = Math.min(100, Math.round((overlap * 0.6 + dice * 0.4) * 100))
+
+  return { score, common }
+}
+
+/*
+  Aggregate all music and interest data across both User model and MusicProfile model
+*/
+const extractUserData = (user, music = null) => {
+  const artists = [
+    ...(user?.favoriteArtists || []),
+    ...(music?.favoriteArtists || []),
+    ...(music?.topArtists || []),
+  ]
+
+  const genres = [
+    ...(user?.favoriteGenres || []),
+    ...(music?.genres || []),
+  ]
+
+  const vibes = [
+    ...(music?.vibeTags || []),
+  ]
+
+  const interests = [
+    ...(user?.interests || []),
+  ]
+
+  const songs = [
+    ...(user?.favoriteSongs || []),
+    ...(music?.favoriteSongs || []),
+    ...(music?.topTracks || []),
+  ]
+
+  return { artists, genres, vibes, interests, songs }
+}
+
+/*
+  Calculate comprehensive, explainable compatibility.
+  Dynamically rebalances weights if certain profile categories are missing/partial.
 */
 const calculateCompatibility = (
   userA,
@@ -72,85 +135,109 @@ const calculateCompatibility = (
   musicB = null,
   options = {},
 ) => {
-  const artistScore =
-    calculateSimilarity(
-      userA.favoriteArtists,
-      userB.favoriteArtists,
-    )
+  const dataA = extractUserData(userA, musicA)
+  const dataB = extractUserData(userB, musicB)
 
-  const genreScore =
-    calculateSimilarity(
-      userA.favoriteGenres,
-      userB.favoriteGenres,
-    )
+  const artistResult = findMatchesAndScore(dataA.artists, dataB.artists)
+  const genreResult = findMatchesAndScore(dataA.genres, dataB.genres)
+  const vibeResult = findMatchesAndScore(dataA.vibes, dataB.vibes)
+  const interestResult = findMatchesAndScore(dataA.interests, dataB.interests)
+  const songResult = findMatchesAndScore(dataA.songs, dataB.songs)
 
-  const vibeScore =
-    calculateSimilarity(
-      musicA?.vibeTags,
-      musicB?.vibeTags,
-    )
-
-  const interestScore =
-    calculateSimilarity(
-      userA.interests,
-      userB.interests,
-    )
-
-  const songScore =
-    calculateSimilarity(
-      userA.favoriteSongs,
-      userB.favoriteSongs,
-    )
-
-  const showSimilarMusic =
-    options.showSimilarMusic !==
-    false
+  const showSimilarMusic = options.showSimilarMusic !== false
 
   let score = 0
 
   if (showSimilarMusic) {
-    /*
-      Music enabled:
+    const factors = [
+      {
+        res: artistResult,
+        weight: 35,
+        hasData: dataA.artists.length > 0 && dataB.artists.length > 0,
+      },
+      {
+        res: genreResult,
+        weight: 25,
+        hasData: dataA.genres.length > 0 && dataB.genres.length > 0,
+      },
+      {
+        res: vibeResult,
+        weight: 20,
+        hasData: dataA.vibes.length > 0 && dataB.vibes.length > 0,
+      },
+      {
+        res: interestResult,
+        weight: 15,
+        hasData: dataA.interests.length > 0 && dataB.interests.length > 0,
+      },
+      {
+        res: songResult,
+        weight: 5,
+        hasData: dataA.songs.length > 0 && dataB.songs.length > 0,
+      },
+    ]
 
-      Artists 35%
-      Genres 25%
-      Vibes 20%
-      Interests 15%
-      Songs 5%
-    */
-    score = Math.round(
-      artistScore * 0.35 +
-        genreScore * 0.25 +
-        vibeScore * 0.2 +
-        interestScore * 0.15 +
-        songScore * 0.05,
-    )
+    let totalWeight = 0
+    let weightedSum = 0
+
+    factors.forEach((f) => {
+      if (f.hasData) {
+        weightedSum += f.res.score * f.weight
+        totalWeight += f.weight
+      }
+    })
+
+    if (totalWeight > 0) {
+      score = Math.round(weightedSum / totalWeight)
+    } else {
+      score = interestResult.score || 0
+    }
   } else {
-    /*
-      Music disabled.
+    score = interestResult.score
+  }
 
-      Remove music factors:
-      - Artists
-      - Genres
-      - Vibes
-      - Songs
+  // Dynamic punchy headline & explainable summary
+  let summary = 'Vibe Explorers ✨'
+  let whyYouVibe = 'You both bring unique flavors to discover together.'
 
-      Interest becomes the
-      primary compatibility factor.
-    */
-    score = interestScore
+  if (artistResult.common.length > 0 && vibeResult.common.length > 0) {
+    summary = 'Harmonic Resonance 🎵'
+    whyYouVibe = `You both vibe to ${artistResult.common.slice(0, 2).join(' & ')} with matching ${vibeResult.common[0]} energy.`
+  } else if (artistResult.common.length > 0) {
+    summary = 'Sonic Soulmates 🎧'
+    whyYouVibe = `Connected through mutual love for ${artistResult.common.slice(0, 2).join(' & ')}.`
+  } else if (genreResult.common.length > 0) {
+    summary = 'Shared Groove 🎶'
+    whyYouVibe = `Aligned on ${genreResult.common.slice(0, 2).join(' & ')} music rhythms.`
+  } else if (vibeResult.common.length > 0) {
+    summary = 'Complementary Energy ⚡'
+    whyYouVibe = `Matching on "${vibeResult.common.slice(0, 2).join('" & "')}" vibe profiles.`
+  } else if (interestResult.common.length > 0) {
+    summary = 'Kindred Spirits 💫'
+    whyYouVibe = `Shared passions in ${interestResult.common.slice(0, 2).join(' and ')}.`
   }
 
   return {
     score,
 
     breakdown: {
-      artists: artistScore,
-      genres: genreScore,
-      vibes: vibeScore,
-      interests: interestScore,
-      songs: songScore,
+      artists: artistResult.score,
+      genres: genreResult.score,
+      vibes: vibeResult.score,
+      interests: interestResult.score,
+      songs: songResult.score,
     },
+
+    sharedHighlights: {
+      artists: artistResult.common,
+      genres: genreResult.common,
+      vibes: vibeResult.common,
+      interests: interestResult.common,
+      songs: songResult.common,
+    },
+
+    summary,
+    whyYouVibe,
 
     settings: {
       showSimilarMusic,
