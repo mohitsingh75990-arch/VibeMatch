@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import socket from '../services/socket'
+import { getApiErrorMessage } from '../services/errors'
 
 const API_ORIGIN = import.meta.env.VITE_API_URL.replace(
   /\/api\/?$/,
@@ -136,10 +137,12 @@ function Matches() {
   const [onlineUserIds, setOnlineUserIds] = useState([])
   const [lastSeenMap, setLastSeenMap] = useState({})
   const [unmatchingId, setUnmatchingId] = useState(null)
+  const [blockingId, setBlockingId] = useState(null)
   const [lastMessages, setLastMessages] = useState({})
   const [compatibilityData, setCompatibilityData] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const loadingRef = useRef(false)
 
   const [reportUser, setReportUser] = useState(null)
   const [reportReason, setReportReason] = useState('spam')
@@ -153,97 +156,107 @@ function Matches() {
   const [aiInsightsCache, setAiInsightsCache] = useState({})
 
   // Load matches
-  useEffect(() => {
-    const loadMatches = async () => {
-      try {
-        setLoading(true)
-        setError('')
+  const loadMatches = async () => {
+    // Prevent duplicate/overlapping requests while one is pending.
+    if (loadingRef.current) {
+      return
+    }
 
-        const response = await api.get('/matches')
+    loadingRef.current = true
 
-        const matchUsers = response.data.matches || []
+    try {
+      setLoading(true)
+      setError('')
 
-        setMatches(matchUsers)
+      const response = await api.get('/matches')
 
-        const messageResults = await Promise.all(
+      const matchUsers = response.data.matches || []
+
+      setMatches(matchUsers)
+
+      const messageResults = await Promise.all(
+        matchUsers.map(async (user) => {
+          try {
+            const messageResponse = await api.get(
+              `/messages/${user._id}`,
+            )
+
+            const messages =
+              messageResponse.data.messages || []
+
+            const latestMessage =
+              messages[messages.length - 1]
+
+            return {
+              userId: user._id,
+              message: latestMessage || null,
+            }
+          } catch {
+            return {
+              userId: user._id,
+              message: null,
+            }
+          }
+        }),
+      )
+
+      const messageMap = {}
+
+      messageResults.forEach(
+        ({ userId, message }) => {
+          messageMap[userId] = message
+        },
+      )
+
+      setLastMessages(messageMap)
+
+      const compatibilityResults =
+        await Promise.all(
           matchUsers.map(async (user) => {
             try {
-              const messageResponse = await api.get(
-                `/messages/${user._id}`,
-              )
-
-              const messages =
-                messageResponse.data.messages || []
-
-              const latestMessage =
-                messages[messages.length - 1]
+              const compatibilityResponse =
+                await api.get(
+                  `/compatibility/${user._id}`,
+                )
 
               return {
                 userId: user._id,
-                message: latestMessage || null,
+                data:
+                  compatibilityResponse.data
+                    .compatibility || null,
               }
             } catch {
               return {
                 userId: user._id,
-                message: null,
+                data: null,
               }
             }
           }),
         )
 
-        const messageMap = {}
+      const compatibilityMap = {}
 
-        messageResults.forEach(
-          ({ userId, message }) => {
-            messageMap[userId] = message
-          },
-        )
+      compatibilityResults.forEach(
+        ({ userId, data }) => {
+          compatibilityMap[userId] = data
+        },
+      )
 
-        setLastMessages(messageMap)
-
-        const compatibilityResults =
-          await Promise.all(
-            matchUsers.map(async (user) => {
-              try {
-                const compatibilityResponse =
-                  await api.get(
-                    `/compatibility/${user._id}`,
-                  )
-
-                return {
-                  userId: user._id,
-                  data:
-                    compatibilityResponse.data
-                      .compatibility || null,
-                }
-              } catch {
-                return {
-                  userId: user._id,
-                  data: null,
-                }
-              }
-            }),
-          )
-
-        const compatibilityMap = {}
-
-        compatibilityResults.forEach(
-          ({ userId, data }) => {
-            compatibilityMap[userId] = data
-          },
-        )
-
-        setCompatibilityData(compatibilityMap)
-      } catch (err) {
-        setError(
-          err.response?.data?.message ||
-            'Unable to load matches',
-        )
-      } finally {
-        setLoading(false)
-      }
+      setCompatibilityData(compatibilityMap)
+    } catch (err) {
+      setError(
+        getApiErrorMessage(
+          err,
+          'Unable to load matches',
+        ),
+      )
+    } finally {
+      loadingRef.current = false
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     loadMatches()
   }, [])
 
@@ -399,6 +412,10 @@ function Matches() {
   }
 
   const handleUnmatch = async (userId, userName) => {
+    if (unmatchingId || blockingId) {
+      return
+    }
+
     const confirmed = window.confirm(
       `Are you sure you want to unmatch ${userName}? This will remove your match and chat.`,
     )
@@ -416,8 +433,7 @@ function Matches() {
       removeUserFromLocalState(userId)
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to unmatch user',
+        getApiErrorMessage(err, 'Unable to unmatch user'),
       )
     } finally {
       setUnmatchingId(null)
@@ -425,6 +441,10 @@ function Matches() {
   }
 
   const handleBlock = async (userId, userName) => {
+    if (unmatchingId || blockingId) {
+      return
+    }
+
     const confirmed = window.confirm(
       `Are you sure you want to block ${userName}?`,
     )
@@ -434,6 +454,7 @@ function Matches() {
     }
 
     try {
+      setBlockingId(userId)
       setError('')
 
       await api.post(`/blocks/${userId}`)
@@ -441,9 +462,10 @@ function Matches() {
       removeUserFromLocalState(userId)
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to block user',
+        getApiErrorMessage(err, 'Unable to block user'),
       )
+    } finally {
+      setBlockingId(null)
     }
   }
 
@@ -465,6 +487,10 @@ function Matches() {
   }
 
   const openAiModal = async (targetUser) => {
+    if (aiLoading) {
+      return
+    }
+
     setAiModalUser(targetUser)
     setAiError('')
 
@@ -492,8 +518,10 @@ function Matches() {
       }
     } catch (err) {
       setAiError(
-        err.response?.data?.message ||
+        getApiErrorMessage(
+          err,
           'Unable to generate AI match explanation.',
+        ),
       )
     } finally {
       setAiLoading(false)
@@ -535,8 +563,7 @@ function Matches() {
       )
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to report user',
+        getApiErrorMessage(err, 'Unable to report user'),
       )
     } finally {
       setReportLoading(false)
@@ -582,46 +609,6 @@ function Matches() {
     },
   ]
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-          <div className="text-5xl">💜</div>
-
-          <p className="mt-4 font-semibold text-slate-700">
-            Loading your matches...
-          </p>
-
-          <p className="mt-1 text-sm text-slate-400">
-            Finding your best connections.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error && matches.length === 0 && !reportUser) {
-    return (
-      <div className="mx-auto max-w-6xl px-4 py-10">
-        <div className="rounded-3xl bg-red-50 p-8 text-center">
-          <div className="text-4xl">⚠️</div>
-
-          <p className="mt-3 font-semibold text-red-700">
-            {error}
-          </p>
-
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-5 rounded-full bg-red-600 px-6 py-3 font-semibold text-white hover:bg-red-700"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* HEADER */}
@@ -659,37 +646,73 @@ function Matches() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
-
-      {/* EMPTY STATE */}
-      {matches.length === 0 ? (
+      {loading ? (
+        /* LOADING STATE */
         <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
-          <div className="text-6xl">💜</div>
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" />
 
-          <p className="mt-5 text-2xl font-bold text-slate-800">
-            No matches yet
+          <p className="mt-4 font-semibold text-slate-700">
+            Loading your matches...
           </p>
 
-          <p className="mx-auto mt-2 max-w-md text-slate-500">
-            Keep discovering people and connect with
-            someone who shares your music and interests.
+          <p className="mt-1 text-sm text-slate-400">
+            Finding your best connections.
+          </p>
+        </div>
+      ) : error && matches.length === 0 ? (
+        /* ERROR STATE WITH RETRY */
+        <div className="rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200 sm:p-10">
+          <div className="text-4xl">⚠️</div>
+
+          <p className="mt-3 font-semibold text-red-600">
+            {error}
+          </p>
+
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+            We couldn't load your matches right now. Please try again — nothing was lost.
           </p>
 
           <button
             type="button"
-            onClick={() => navigate('/discover')}
-            className="mt-6 rounded-full bg-violet-600 px-7 py-3 font-semibold text-white transition hover:bg-violet-700"
+            onClick={loadMatches}
+            className="mt-5 rounded-full bg-violet-600 px-6 py-3 font-semibold text-white transition hover:bg-violet-700"
           >
-            Discover People
+            🔁 Try Again
           </button>
         </div>
       ) : (
-        /* MATCH GRID */
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <>
+          {error && (
+            <div className="mb-5 rounded-2xl bg-red-50 px-4 py-3 text-sm leading-6 text-red-600">
+              {error}
+            </div>
+          )}
+
+          {/* EMPTY STATE */}
+          {matches.length === 0 ? (
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200">
+              <div className="text-6xl">💜</div>
+
+              <p className="mt-5 text-2xl font-bold text-slate-800">
+                No matches yet
+              </p>
+
+              <p className="mx-auto mt-2 max-w-md text-slate-500">
+                Keep discovering people and connect with
+                someone who shares your music and interests.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => navigate('/discover')}
+                className="mt-6 rounded-full bg-violet-600 px-7 py-3 font-semibold text-white transition hover:bg-violet-700"
+              >
+                Discover People
+              </button>
+            </div>
+          ) : (
+            /* MATCH GRID */
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {matches.map((user) => {
             const latestMessage =
               lastMessages[user._id]
@@ -975,7 +998,8 @@ function Matches() {
                     <button
                       type="button"
                       onClick={() => openAiModal(user)}
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 via-pink-50 to-violet-50 px-4 py-2.5 text-xs font-bold text-violet-800 shadow-xs transition hover:from-fuchsia-100 hover:to-violet-100 hover:shadow-sm active:scale-[0.99]"
+                      disabled={aiLoading}
+                      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 via-pink-50 to-violet-50 px-4 py-2.5 text-xs font-bold text-violet-800 shadow-xs transition hover:from-fuchsia-100 hover:to-violet-100 hover:shadow-sm active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <span>✨</span>
                       <span>AI Vibe Insight &amp; Date Idea</span>
@@ -998,46 +1022,62 @@ function Matches() {
 
                     <button
                       type="button"
-                      disabled={unmatchingId === user._id}
+                      disabled={
+                        Boolean(unmatchingId) ||
+                        Boolean(blockingId)
+                      }
                       onClick={() =>
                         handleUnmatch(
                           user._id,
                           user.name,
                         )
                       }
-                      className="rounded-full border border-red-200 px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                      className="rounded-full border border-red-200 px-4 py-3 font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {unmatchingId === user._id ? 'Unmatching...' : 'Unmatch'}
                     </button>
 
                     <button
                       type="button"
+                      disabled={
+                        Boolean(unmatchingId) ||
+                        Boolean(blockingId)
+                      }
                       onClick={() =>
                         handleBlock(
                           user._id,
                           user.name,
                         )
                       }
-                      className="rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+                      className="rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      🚫 Block
+                      {blockingId === user._id
+                        ? 'Blocking...'
+                        : '🚫 Block'}
                     </button>
 
                     <button
                       type="button"
+                      disabled={
+                        Boolean(unmatchingId) ||
+                        Boolean(blockingId) ||
+                        reportLoading
+                      }
                       onClick={() =>
                         openReportModal(user)
                       }
-                      className="rounded-full border border-orange-200 px-4 py-2.5 text-sm font-semibold text-orange-600 transition hover:bg-orange-50"
+                      className="rounded-full border border-orange-200 px-4 py-2.5 text-sm font-semibold text-orange-600 transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       ⚠️ Report
                     </button>
                   </div>
                 </div>
               </div>
-            )
-          })}
-        </div>
+              )
+            })}
+            </div>
+          )}
+        </>
       )}
 
       {/* REPORT MODAL */}
@@ -1196,7 +1236,15 @@ function Matches() {
 
             {aiError && !aiLoading && (
               <div className="my-6 rounded-2xl bg-red-50 p-4 text-sm text-red-600">
-                {aiError}
+                <p>{aiError}</p>
+
+                <button
+                  type="button"
+                  onClick={() => openAiModal(aiModalUser)}
+                  className="mt-3 rounded-full bg-red-600 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                >
+                  🔁 Try Again
+                </button>
               </div>
             )}
 

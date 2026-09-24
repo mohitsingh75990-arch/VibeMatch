@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
+import { getApiErrorMessage } from '../services/errors'
 
 const API_ORIGIN = import.meta.env.VITE_API_URL.replace(
   /\/api\/?$/,
@@ -221,12 +222,22 @@ function Discover() {
       console.error('Discover loading error:', err)
 
       setError(
-        err.response?.data?.message ||
-          'Unable to load users',
+        getApiErrorMessage(
+          err,
+          'Unable to load people right now.',
+        ),
       )
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleRetryLoad = () => {
+    if (loading) {
+      return
+    }
+
+    loadUsers(filters)
   }
 
   useEffect(() => {
@@ -284,11 +295,19 @@ function Discover() {
   }
 
   const handleApplyFilters = async () => {
+    if (loading) {
+      return
+    }
+
     setMatchMessage('')
     await loadUsers(filters)
   }
 
   const handleClearFilters = async () => {
+    if (loading) {
+      return
+    }
+
     const clearedFilters = {
       minAge: '',
       maxAge: '',
@@ -308,6 +327,10 @@ function Discover() {
   }
 
   const removeIndividualFilter = async (filterKey) => {
+    if (loading) {
+      return
+    }
+
     const updated = {
       ...filters,
       [filterKey]:
@@ -325,6 +348,10 @@ function Discover() {
       key: 'age',
       label: `Age ${filters.minAge || '18'}–${filters.maxAge || '100'}`,
       onRemove: () => {
+        if (loading) {
+          return
+        }
+
         const updated = { ...filters, minAge: '', maxAge: '' }
         setFilters(updated)
         loadUsers(updated)
@@ -410,8 +437,10 @@ function Discover() {
       }
     } catch (err) {
       setError(
-        err.response?.data?.message ||
+        getApiErrorMessage(
+          err,
           'Unable to save your interaction',
+        ),
       )
     } finally {
       setActionLoading(null)
@@ -444,8 +473,7 @@ function Discover() {
       )
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to block user',
+        getApiErrorMessage(err, 'Unable to block user'),
       )
     } finally {
       setActionLoading(null)
@@ -502,8 +530,7 @@ function Discover() {
       )
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to report user',
+        getApiErrorMessage(err, 'Unable to report user'),
       )
     } finally {
       setReportLoading(false)
@@ -552,16 +579,6 @@ function Discover() {
         icon: '🎶',
       },
     ]
-  }
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:py-10">
-        <p className="text-center text-sm text-slate-500 sm:text-base">
-          Loading people...
-        </p>
-      </div>
-    )
   }
 
   return (
@@ -615,7 +632,8 @@ function Discover() {
               <button
                 type="button"
                 onClick={handleClearFilters}
-                className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline"
+                disabled={loading}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 underline disabled:opacity-50"
               >
                 Clear all
               </button>
@@ -798,15 +816,17 @@ function Discover() {
             <button
               type="button"
               onClick={handleApplyFilters}
-              className="w-full rounded-full bg-violet-600 px-7 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-violet-700 sm:w-auto"
+              disabled={loading}
+              className="w-full rounded-full bg-violet-600 px-7 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
-              Apply Filters
+              {loading ? 'Applying...' : 'Apply Filters'}
             </button>
 
             <button
               type="button"
               onClick={handleClearFilters}
-              className="w-full rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+              disabled={loading}
+              className="w-full rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               Reset Filters
             </button>
@@ -835,7 +855,8 @@ function Discover() {
           <button
             type="button"
             onClick={handleClearFilters}
-            className="text-xs font-semibold text-slate-500 hover:text-rose-600 underline ml-1"
+            disabled={loading}
+            className="text-xs font-semibold text-slate-500 hover:text-rose-600 underline ml-1 disabled:opacity-50"
           >
             Clear all
           </button>
@@ -860,7 +881,7 @@ function Discover() {
 
       {/* ERROR */}
 
-      {error && (
+      {error && users.length > 0 && (
         <div className="mb-5 rounded-2xl bg-red-50 p-4 text-center text-sm leading-6 text-red-600 sm:mb-6 sm:text-base">
           {error}
         </div>
@@ -868,7 +889,51 @@ function Discover() {
 
       {/* USERS */}
 
-      {users.length === 0 ? (
+      {loading ? (
+        <div className="rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-slate-200 sm:rounded-3xl sm:p-14">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" />
+
+          <p className="mt-4 text-sm font-semibold text-slate-700 sm:text-base">
+            Finding people who match your vibe...
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+            This usually takes a moment.
+          </p>
+        </div>
+      ) : error && users.length === 0 ? (
+        <div className="rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-slate-200 sm:rounded-3xl sm:p-10">
+          <div className="text-5xl mb-3">⚠️</div>
+
+          <p className="text-lg font-semibold text-slate-800 sm:text-xl">
+            {error}
+          </p>
+
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500 sm:text-base">
+            We couldn't load people just now. Nothing was lost — please try again.
+          </p>
+
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              type="button"
+              onClick={handleRetryLoad}
+              className="w-full rounded-full bg-violet-600 px-7 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-violet-700 sm:w-auto"
+            >
+              🔁 Retry
+            </button>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="w-full rounded-full border border-slate-300 px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+              >
+                Reset All Filters
+              </button>
+            )}
+          </div>
+        </div>
+      ) : users.length === 0 ? (
         <div className="rounded-2xl bg-white p-7 text-center shadow-sm ring-1 ring-slate-200 sm:rounded-3xl sm:p-10">
           <div className="text-5xl mb-3">🔍</div>
           <p className="text-lg font-semibold text-slate-800 sm:text-xl">
@@ -1176,61 +1241,57 @@ function Discover() {
                   <div className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3">
                     <button
                       type="button"
-                      disabled={
-                        actionLoading === user._id
-                      }
+                      disabled={Boolean(actionLoading)}
                       onClick={() =>
                         handleInteraction(
                           user._id,
                           'pass',
                         )
                       }
-                      className="rounded-full border border-slate-300 px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 sm:px-4"
+                      className="rounded-full border border-slate-300 px-3 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
                     >
-                      ❌ Pass
+                      {actionLoading === user._id
+                        ? 'Working...'
+                        : '❌ Pass'}
                     </button>
 
                     <button
                       type="button"
-                      disabled={
-                        actionLoading === user._id
-                      }
+                      disabled={Boolean(actionLoading)}
                       onClick={() =>
                         handleInteraction(
                           user._id,
                           'like',
                         )
                       }
-                      className="rounded-full bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 sm:px-4"
+                      className="rounded-full bg-violet-600 px-3 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
                     >
-                      ❤️ Like
+                      {actionLoading === user._id
+                        ? 'Working...'
+                        : '❤️ Like'}
                     </button>
 
                     <button
                       type="button"
-                      disabled={
-                        actionLoading === user._id
-                      }
+                      disabled={Boolean(actionLoading)}
                       onClick={() =>
                         handleBlock(
                           user._id,
                           user.name,
                         )
                       }
-                      className="rounded-full border border-slate-300 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-50 sm:text-sm"
+                      className="rounded-full border border-slate-300 px-3 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
                     >
                       🚫 Block
                     </button>
 
                     <button
                       type="button"
-                      disabled={
-                        actionLoading === user._id
-                      }
+                      disabled={Boolean(actionLoading)}
                       onClick={() =>
                         openReportModal(user)
                       }
-                      className="rounded-full border border-orange-200 px-3 py-2.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 disabled:opacity-50 sm:text-sm"
+                      className="rounded-full border border-orange-200 px-3 py-2.5 text-xs font-semibold text-orange-600 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
                     >
                       ⚠️ Report
                     </button>

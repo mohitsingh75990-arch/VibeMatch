@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { getApiErrorMessage } from '../services/errors'
 
 /* ─── Profile Completeness Bar ─────────────────────────────────────────── */
 function ProfileCompletenessBar({ profile, form, musicForm }) {
@@ -350,6 +351,8 @@ function Profile() {
     showSimilarMusic: true,
   })
 
+  const loadingRef = useRef(false)
+
   const [form, setForm] = useState({
     name: '',
     age: '',
@@ -379,98 +382,109 @@ function Profile() {
     return `${API_ORIGIN}${imagePath}`
   }
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setError('')
-
-        const response = await api.get('/users/me')
-
-        let musicData = {}
-
-        try {
-          const musicResponse = await api.get('/music')
-          musicData =
-            musicResponse.data.musicProfile || {}
-        } catch {
-          musicData = {}
-        }
-
-        let preferencesData = {}
-
-        try {
-          const preferencesResponse =
-            await api.get('/users/me/preferences')
-
-          preferencesData =
-            preferencesResponse.data.preferences || {}
-        } catch {
-          preferencesData = {}
-        }
-
-        const data = response.data.user
-
-        setProfile(data)
-
-        setForm({
-          name: data.name || '',
-          age: data.age || '',
-          gender: data.gender || '',
-          bio: data.bio || '',
-          location: data.location || '',
-          profileImage: data.profileImage || '',
-          interests:
-            data.interests?.join(', ') || '',
-
-          favoriteArtists:
-            musicData.favoriteArtists?.join(', ') ||
-            data.favoriteArtists?.join(', ') ||
-            '',
-
-          favoriteGenres:
-            musicData.genres?.join(', ') ||
-            data.favoriteGenres?.join(', ') ||
-            '',
-
-          favoriteSongs:
-            musicData.favoriteSongs?.join(', ') ||
-            data.favoriteSongs?.join(', ') ||
-            '',
-
-          vibeTags: musicData.vibeTags || [],
-        })
-
-        setPreferences({
-          interestedIn:
-            preferencesData.interestedIn || [],
-          minAge:
-            preferencesData.minAge ?? 18,
-          maxAge:
-            preferencesData.maxAge ?? 100,
-          minVibeScore:
-            preferencesData.minVibeScore ?? 0,
-          showSimilarMusic:
-            preferencesData.showSimilarMusic ?? true,
-        })
-
-        setMusicProfile(musicData)
-
-        if (data.profileImage) {
-          setImagePreview(
-            getImageUrl(data.profileImage),
-          )
-        }
-      } catch (error) {
-        setError(
-          error.response?.data?.message ||
-            'Unable to load your profile.',
-        )
-      } finally {
-        setLoading(false)
-      }
+  const loadProfile = async () => {
+    // Prevent duplicate/overlapping requests while one is pending.
+    if (loadingRef.current) {
+      return
     }
 
-    fetchProfile()
+    loadingRef.current = true
+
+    try {
+      setLoading(true)
+      setError('')
+
+      const response = await api.get('/users/me')
+
+      let musicData = {}
+
+      try {
+        const musicResponse = await api.get('/music')
+        musicData =
+          musicResponse.data.musicProfile || {}
+      } catch {
+        musicData = {}
+      }
+
+      let preferencesData = {}
+
+      try {
+        const preferencesResponse =
+          await api.get('/users/me/preferences')
+
+        preferencesData =
+          preferencesResponse.data.preferences || {}
+      } catch {
+        preferencesData = {}
+      }
+
+      const data = response.data.user
+
+      setProfile(data)
+
+      setForm({
+        name: data.name || '',
+        age: data.age || '',
+        gender: data.gender || '',
+        bio: data.bio || '',
+        location: data.location || '',
+        profileImage: data.profileImage || '',
+        interests:
+          data.interests?.join(', ') || '',
+
+        favoriteArtists:
+          musicData.favoriteArtists?.join(', ') ||
+          data.favoriteArtists?.join(', ') ||
+          '',
+
+        favoriteGenres:
+          musicData.genres?.join(', ') ||
+          data.favoriteGenres?.join(', ') ||
+          '',
+
+        favoriteSongs:
+          musicData.favoriteSongs?.join(', ') ||
+          data.favoriteSongs?.join(', ') ||
+          '',
+
+        vibeTags: musicData.vibeTags || [],
+      })
+
+      setPreferences({
+        interestedIn:
+          preferencesData.interestedIn || [],
+        minAge:
+          preferencesData.minAge ?? 18,
+        maxAge:
+          preferencesData.maxAge ?? 100,
+        minVibeScore:
+          preferencesData.minVibeScore ?? 0,
+        showSimilarMusic:
+          preferencesData.showSimilarMusic ?? true,
+      })
+
+      setMusicProfile(musicData)
+
+      if (data.profileImage) {
+        setImagePreview(
+          getImageUrl(data.profileImage),
+        )
+      }
+    } catch (error) {
+      setError(
+        getApiErrorMessage(
+          error,
+          'Unable to load your profile.',
+        ),
+      )
+    } finally {
+      loadingRef.current = false
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProfile()
 
     const params = new URLSearchParams(window.location.search)
     const spotifyStatus = params.get('spotify')
@@ -483,9 +497,14 @@ function Profile() {
     } else if (spotifyStatus === 'error') {
       setError('An error occurred while connecting your Spotify account.')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleConnectSpotify = async () => {
+    if (spotifyActionLoading) {
+      return
+    }
+
     try {
       setSpotifyActionLoading(true)
       setError('')
@@ -521,13 +540,17 @@ function Profile() {
         }
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to connect to Spotify')
+      setError(getApiErrorMessage(err, 'Unable to connect to Spotify'))
     } finally {
       setSpotifyActionLoading(false)
     }
   }
 
   const handleSyncSpotify = async () => {
+    if (spotifyActionLoading) {
+      return
+    }
+
     try {
       setSpotifyActionLoading(true)
       setError('')
@@ -539,13 +562,17 @@ function Profile() {
         setSpotifyMessage('Spotify music data synced fresh from Spotify! 🎵')
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to sync Spotify data')
+      setError(getApiErrorMessage(err, 'Unable to sync Spotify data'))
     } finally {
       setSpotifyActionLoading(false)
     }
   }
 
   const handleDisconnectSpotify = async () => {
+    if (spotifyActionLoading) {
+      return
+    }
+
     const confirmed = window.confirm(
       'Are you sure you want to disconnect Spotify from your profile?',
     )
@@ -564,7 +591,7 @@ function Profile() {
       }))
       setSpotifyMessage('Spotify account disconnected successfully.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to disconnect Spotify')
+      setError(getApiErrorMessage(err, 'Unable to disconnect Spotify'))
     } finally {
       setSpotifyActionLoading(false)
     }
@@ -621,6 +648,11 @@ function Profile() {
     const file = event.target.files?.[0]
 
     if (!file) {
+      return
+    }
+
+    if (imageUploading) {
+      event.target.value = ''
       return
     }
 
@@ -682,6 +714,11 @@ function Profile() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    if (imageUploading) {
+      event.target.value = ''
+      return
+    }
+
     setError('')
     setImageSuccess('')
 
@@ -717,7 +754,7 @@ function Profile() {
       login({ ...user, ...updatedUser }, token)
       setImageSuccess('Photo added to gallery successfully.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to upload photo.')
+      setError(getApiErrorMessage(err, 'Unable to upload photo.'))
     } finally {
       setImageUploading(false)
       event.target.value = ''
@@ -725,6 +762,10 @@ function Profile() {
   }
 
   const handleDeleteGalleryPhoto = async (photoId) => {
+    if (imageUploading) {
+      return
+    }
+
     try {
       setImageUploading(true)
       setError('')
@@ -748,13 +789,17 @@ function Profile() {
       login({ ...user, ...updatedUser }, token)
       setImageSuccess('Photo deleted successfully.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to delete photo.')
+      setError(getApiErrorMessage(err, 'Unable to delete photo.'))
     } finally {
       setImageUploading(false)
     }
   }
 
   const handleSetPrimaryPhoto = async (photoId) => {
+    if (imageUploading) {
+      return
+    }
+
     try {
       setImageUploading(true)
       setError('')
@@ -775,13 +820,17 @@ function Profile() {
       login({ ...user, ...updatedUser }, token)
       setImageSuccess('Primary profile photo updated.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to update primary photo.')
+      setError(getApiErrorMessage(err, 'Unable to update primary photo.'))
     } finally {
       setImageUploading(false)
     }
   }
 
   const handleMovePhoto = async (currentIndex, direction) => {
+    if (imageUploading) {
+      return
+    }
+
     const currentPhotos = getNormalizedPhotos()
     const targetIndex = currentIndex + direction
     if (targetIndex < 0 || targetIndex >= currentPhotos.length) return
@@ -813,13 +862,17 @@ function Profile() {
       login({ ...user, ...updatedUser }, token)
       setImageSuccess('Photo gallery order updated.')
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to reorder photos.')
+      setError(getApiErrorMessage(err, 'Unable to reorder photos.'))
     } finally {
       setImageUploading(false)
     }
   }
 
   const handleUploadImage = async () => {
+    if (imageUploading) {
+      return
+    }
+
     if (!imageFile) {
       setError('Please select an image first.')
       return
@@ -871,8 +924,10 @@ function Profile() {
       )
     } catch (error) {
       setError(
-        error.response?.data?.message ||
+        getApiErrorMessage(
+          error,
           'Unable to upload profile photo.',
+        ),
       )
     } finally {
       setImageUploading(false)
@@ -880,6 +935,10 @@ function Profile() {
   }
 
   const handleSaveMusic = async () => {
+    if (musicSaving) {
+      return
+    }
+
     try {
       setMusicSaving(true)
       setError('')
@@ -908,8 +967,10 @@ function Profile() {
       )
     } catch (error) {
       setError(
-        error.response?.data?.message ||
+        getApiErrorMessage(
+          error,
           'Unable to update music profile.',
+        ),
       )
     } finally {
       setMusicSaving(false)
@@ -917,6 +978,10 @@ function Profile() {
   }
 
   const handleSave = async () => {
+    if (saving) {
+      return
+    }
+
     try {
       setSaving(true)
       setError('')
@@ -972,8 +1037,10 @@ function Profile() {
       )
     } catch (error) {
       setError(
-        error.response?.data?.message ||
+        getApiErrorMessage(
+          error,
           'Unable to update your profile.',
+        ),
       )
     } finally {
       setSaving(false)
@@ -982,6 +1049,10 @@ function Profile() {
 
   const handleSavePreferences =
     async () => {
+      if (preferencesSaving) {
+        return
+      }
+
       try {
         setPreferencesSaving(true)
         setError('')
@@ -1043,8 +1114,10 @@ function Profile() {
         )
       } catch (error) {
         setError(
-          error.response?.data?.message ||
+          getApiErrorMessage(
+            error,
             'Unable to save dating preferences.',
+          ),
         )
       } finally {
         setPreferencesSaving(false)
@@ -1055,9 +1128,43 @@ function Profile() {
     return (
       <div className="min-h-screen bg-slate-950 px-4 py-24 text-white sm:px-6 sm:py-32">
         <div className="mx-auto max-w-4xl">
-          <p className="text-sm text-slate-400 sm:text-base">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-fuchsia-500 border-t-transparent sm:mx-0" />
+
+          <p className="mt-4 text-sm text-slate-400 sm:text-base">
             Loading your profile...
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!profile && error) {
+    return (
+      <div className="min-h-screen bg-slate-950 px-4 pb-12 pt-24 text-white sm:px-6 sm:pb-16 sm:pt-32">
+        <div className="mx-auto max-w-4xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fuchsia-400 sm:text-sm sm:tracking-[0.2em]">
+            Your Profile
+          </p>
+
+          <div className="mt-5 rounded-3xl border border-red-400/20 bg-red-400/10 p-6 text-center backdrop-blur-xl sm:p-10">
+            <div className="text-4xl">⚠️</div>
+
+            <p className="mt-3 text-lg font-semibold text-red-300">
+              {error}
+            </p>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+              We couldn't load your profile right now. Your data is safe — please try again.
+            </p>
+
+            <button
+              type="button"
+              onClick={loadProfile}
+              className="mt-5 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+            >
+              🔁 Try Again
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -1171,7 +1278,13 @@ function Profile() {
                   </p>
 
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    <label className="cursor-pointer rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-slate-950 transition hover:bg-slate-200">
+                    <label
+                      className={`cursor-pointer rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-slate-950 transition hover:bg-slate-200 ${
+                        imageUploading
+                          ? 'pointer-events-none opacity-60'
+                          : ''
+                      }`}
+                    >
                       Choose photo
 
                       <input
@@ -1180,6 +1293,7 @@ function Profile() {
                         onChange={
                           handleImageSelect
                         }
+                        disabled={imageUploading}
                         className="hidden"
                       />
                     </label>
@@ -1241,6 +1355,18 @@ function Profile() {
                   {getNormalizedPhotos().length} / 6 Photos
                 </span>
               </div>
+
+              {getNormalizedPhotos().length === 0 && (
+                <div className="mb-4 rounded-2xl border border-dashed border-fuchsia-400/30 bg-fuchsia-500/5 p-4 text-center">
+                  <p className="text-sm font-semibold text-fuchsia-200">
+                    📷 No photos yet
+                  </p>
+                  <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-400">
+                    Add at least one photo to your gallery — profiles with photos get
+                    more matches.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
                 {Array.from({ length: 6 }).map((_, slotIdx) => {
@@ -1779,6 +1905,19 @@ function Profile() {
               {spotifyMessage && (
                 <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
                   {spotifyMessage}
+                </div>
+              )}
+
+              {/* SPOTIFY NOT CONNECTED EMPTY STATE */}
+              {!musicProfile?.spotifyConnected && (
+                <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-4 text-center">
+                  <p className="text-sm font-semibold text-slate-200">
+                    🎧 Spotify not connected
+                  </p>
+                  <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-400">
+                    No Spotify music data yet. Connect your account to auto-sync your
+                    top artists, tracks and genres — or fill them in manually below.
+                  </p>
                 </div>
               )}
 

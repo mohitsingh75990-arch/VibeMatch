@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../services/api'
 import socket from '../services/socket'
+import { getApiErrorMessage } from '../services/errors'
 
 const formatLastSeen = (lastSeenDate) => {
   if (!lastSeenDate) return 'Offline'
@@ -44,6 +45,7 @@ function Chat() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [isTyping, setIsTyping] = useState(false)
   const [isOnline, setIsOnline] = useState(false)
   const [targetLastSeen, setTargetLastSeen] = useState(null)
@@ -53,6 +55,7 @@ function Chat() {
 
   const typingTimeoutRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const loadingRef = useRef(false)
 
   const getCurrentUserId = () => {
     const storedUser = localStorage.getItem('vibematch_user')
@@ -104,26 +107,51 @@ function Chat() {
         setTargetLastSeen(response.data.user.lastSeen)
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
+      setLoadError(
+        getApiErrorMessage(
+          err,
           'Unable to load user profile',
+        ),
       )
     }
   }
 
   const loadMessages = async () => {
+    // Prevent duplicate/overlapping requests while one is pending.
+    if (loadingRef.current) {
+      return
+    }
+
+    loadingRef.current = true
+
     try {
       const response = await api.get(`/messages/${userId}`)
       setMessages(response.data.messages || [])
-      setError('')
+      setLoadError('')
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
+      setLoadError(
+        getApiErrorMessage(
+          err,
           'Unable to load conversation',
+        ),
       )
     } finally {
+      loadingRef.current = false
       setLoading(false)
     }
+  }
+
+  const handleRetryConversation = async () => {
+    if (loadingRef.current) {
+      return
+    }
+
+    setLoading(true)
+    setLoadError('')
+    setError('')
+
+    await loadMessages()
+    await loadUser()
   }
 
   const markMessagesDelivered = async () => {
@@ -187,9 +215,13 @@ function Chat() {
   }
 
   useEffect(() => {
-    loadUser()
-    loadMessages()
-    loadIcebreakers()
+    const initConversation = async () => {
+      await loadMessages()
+      loadUser()
+      loadIcebreakers()
+    }
+
+    initConversation()
 
     const currentUserId = getCurrentUserId()
 
@@ -450,8 +482,7 @@ function Chat() {
       setError('')
     } catch (err) {
       setError(
-        err.response?.data?.message ||
-          'Unable to send message',
+        getApiErrorMessage(err, 'Unable to send message'),
       )
     } finally {
       setSending(false)
@@ -542,12 +573,39 @@ function Chat() {
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-5">
           <div className="flex min-h-full flex-col gap-3">
             {loading && (
-              <p className="m-auto text-center text-slate-500">
-                Loading conversation...
-              </p>
+              <div className="m-auto text-center">
+                <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-violet-600 border-t-transparent" />
+                <p className="mt-3 text-sm text-slate-500">
+                  Loading conversation...
+                </p>
+              </div>
             )}
 
-            {!loading && messages.length === 0 && (
+            {!loading && messages.length === 0 && loadError && (
+              <div className="m-auto max-w-md px-4 py-6 text-center">
+                <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-3xl shadow-sm">
+                  ⚠️
+                </div>
+
+                <p className="text-lg font-bold text-slate-800">
+                  Couldn't load this conversation
+                </p>
+
+                <p className="mt-1 break-words text-sm text-slate-500">
+                  {loadError}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleRetryConversation}
+                  className="mt-5 rounded-full bg-violet-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
+                >
+                  🔁 Retry
+                </button>
+              </div>
+            )}
+
+            {!loading && messages.length === 0 && !loadError && (
               <div className="m-auto text-center px-4 py-6 max-w-md">
                 <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-tr from-violet-100 to-fuchsia-100 text-3xl shadow-sm">
                   💜
@@ -592,10 +650,15 @@ function Chat() {
                     <button
                       type="button"
                       onClick={loadIcebreakers}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3.5 py-1.5 text-xs font-medium text-violet-700 shadow-xs transition hover:bg-violet-50 hover:border-violet-300 active:scale-95"
+                      disabled={icebreakersLoading}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white px-3.5 py-1.5 text-xs font-medium text-violet-700 shadow-xs transition hover:bg-violet-50 hover:border-violet-300 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <span>✨</span>
-                      <span>Generate AI Icebreakers</span>
+                      <span>
+                        {icebreakersLoading
+                          ? 'Generating...'
+                          : 'Generate AI Icebreakers'}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -726,9 +789,21 @@ function Chat() {
             </div>
           )}
 
-          {error && (
-            <div className="px-4 pt-2 text-sm text-red-600 sm:px-5">
-              {error}
+          {(error || (loadError && messages.length > 0)) && (
+            <div className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 px-4 pt-2 pb-2 text-sm text-red-600 sm:px-5">
+              <span className="min-w-0 break-words">
+                {error || loadError}
+              </span>
+
+              {loadError && (
+                <button
+                  type="button"
+                  onClick={handleRetryConversation}
+                  className="shrink-0 rounded-full bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-red-700"
+                >
+                  🔁 Retry
+                </button>
+              )}
             </div>
           )}
 
@@ -751,7 +826,11 @@ function Chat() {
               disabled={sending || !text.trim()}
               className="shrink-0 rounded-full bg-violet-600 px-5 py-3 font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-6"
             >
-              {sending ? '...' : 'Send'}
+              {sending ? (
+                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                'Send'
+              )}
             </button>
           </form>
         </div>
