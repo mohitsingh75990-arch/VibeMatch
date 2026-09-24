@@ -21,6 +21,9 @@ const aiRoutes = require('./routes/ai.routes')
 
 const app = express()
 
+// Trust Render reverse proxy for rate limiting and IP detection
+app.set('trust proxy', 1)
+
 // Production-safe security headers with helmet
 app.use(
   helmet({

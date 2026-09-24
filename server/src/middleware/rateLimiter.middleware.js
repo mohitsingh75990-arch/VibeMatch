@@ -6,6 +6,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
+  validate: { trustProxy: false },
   message: {
     success: false,
     message: 'Too many authentication attempts. Please try again after 15 minutes.',
@@ -18,6 +19,7 @@ const aiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
+  validate: { trustProxy: false },
   keyGenerator: (req, res) => {
     return req.user?.userId ? String(req.user.userId) : ipKeyGenerator(req, res)
   },
@@ -33,6 +35,7 @@ const passwordResetLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
+  validate: { trustProxy: false },
   message: {
     success: false,
     message: 'Too many password reset attempts. Please try again after 15 minutes.',
@@ -45,6 +48,7 @@ const emailVerificationLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   statusCode: 429,
+  validate: { trustProxy: false },
   message: {
     success: false,
     message: 'Too many email verification attempts. Please try again after 15 minutes.',
