@@ -1,5 +1,9 @@
+const mongoose = require('mongoose')
 const Interaction = require('../models/Interaction')
 const User = require('../models/User')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 const getMatches = async (req, res) => {
   try {
@@ -46,7 +50,7 @@ const getMatches = async (req, res) => {
       matches,
     })
   } catch (error) {
-    console.error('Get matches error:', error)
+    console.error('Get matches error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -60,10 +64,10 @@ const unmatchUser = async (req, res) => {
     const currentUserId = req.user.userId
     const { userId } = req.params
 
-    if (!userId) {
+    if (!isValidObjectId(userId)) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
+        message: 'Invalid user ID',
       })
     }
 
@@ -114,7 +118,7 @@ const unmatchUser = async (req, res) => {
       message: 'Unmatched successfully',
     })
   } catch (error) {
-    console.error('Unmatch error:', error)
+    console.error('Unmatch error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -126,4 +130,4 @@ const unmatchUser = async (req, res) => {
 module.exports = {
   getMatches,
   unmatchUser,
-}
+}

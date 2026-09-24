@@ -1,15 +1,19 @@
+const mongoose = require('mongoose')
 const Block = require('../models/Block')
 const Interaction = require('../models/Interaction')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 const blockUser = async (req, res) => {
   try {
     const blocker = req.user.userId
     const { userId: blocked } = req.params
 
-    if (!blocked) {
+    if (!isValidObjectId(blocked)) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
+        message: 'Invalid user ID',
       })
     }
 
@@ -58,7 +62,7 @@ const blockUser = async (req, res) => {
       message: 'User blocked successfully',
     })
   } catch (error) {
-    console.error('Block user error:', error)
+    console.error('Block user error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -71,6 +75,13 @@ const unblockUser = async (req, res) => {
   try {
     const blocker = req.user.userId
     const { userId: blocked } = req.params
+
+    if (!isValidObjectId(blocked)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
 
     const result = await Block.findOneAndDelete({
       blocker,
@@ -89,7 +100,7 @@ const unblockUser = async (req, res) => {
       message: 'User unblocked successfully',
     })
   } catch (error) {
-    console.error('Unblock user error:', error)
+    console.error('Unblock user error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -112,7 +123,7 @@ const getBlockedUsers = async (req, res) => {
       blockedUsers,
     })
   } catch (error) {
-    console.error('Get blocked users error:', error)
+    console.error('Get blocked users error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -125,4 +136,4 @@ module.exports = {
   blockUser,
   unblockUser,
   getBlockedUsers,
-}
+}

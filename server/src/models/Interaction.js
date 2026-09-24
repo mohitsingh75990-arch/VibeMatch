@@ -30,4 +30,8 @@ interactionSchema.index(
   { unique: true },
 )
 
-module.exports = mongoose.model('Interaction', interactionSchema)
+// Accelerates the mutual-like (match detection) query:
+// { fromUser: { $in: [...] }, toUser: currentUserId, type: 'like' }
+interactionSchema.index({ toUser: 1, fromUser: 1, type: 1 })
+
+module.exports = mongoose.model('Interaction', interactionSchema)

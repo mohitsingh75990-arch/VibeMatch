@@ -66,7 +66,7 @@ app.get('/api/health', (req, res) => {
   })
 })
 
-// Clean CORS rejection handler
+// Clean CORS rejection handler — must come first
 app.use((err, req, res, next) => {
   if (err && err.message === 'CORS origin not allowed') {
     return res.status(403).json({
@@ -75,6 +75,61 @@ app.use((err, req, res, next) => {
     })
   }
   next(err)
+})
+
+// Mongoose CastError — malformed ObjectId or other cast failure
+app.use((err, req, res, next) => {
+  if (err && err.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid ID format',
+    })
+  }
+  next(err)
+})
+
+// Mongoose ValidationError — schema-level validation failure
+app.use((err, req, res, next) => {
+  if (err && err.name === 'ValidationError') {
+    const messages = Object.values(err.errors || {})
+      .map((e) => e.message)
+      .filter(Boolean)
+    return res.status(400).json({
+      success: false,
+      message: messages.length > 0 ? messages[0] : 'Validation failed',
+    })
+  }
+  next(err)
+})
+
+// MongoDB duplicate key error (E11000)
+app.use((err, req, res, next) => {
+  if (err && err.code === 11000) {
+    return res.status(409).json({
+      success: false,
+      message: 'A record with this value already exists',
+    })
+  }
+  next(err)
+})
+
+// Generic catch-all — never expose stack traces or DB internals in production
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (!isProduction) {
+    console.error('[Unhandled error]', err)
+  } else {
+    console.error('[Unhandled error]', err.message)
+  }
+
+  return res.status(err.status || 500).json({
+    success: false,
+    message: isProduction
+      ? 'An unexpected error occurred'
+      : err.message || 'An unexpected error occurred',
+  })
 })
 
 module.exports = app

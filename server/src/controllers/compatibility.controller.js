@@ -1,5 +1,10 @@
+const mongoose = require('mongoose')
 const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
+
 
 const calculateSimilarity = (
   firstList = [],
@@ -163,6 +168,13 @@ const getCompatibility = async (
 
     const { userId } = req.params
 
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
+
     if (
       currentUserId === userId
     ) {
@@ -172,6 +184,7 @@ const getCompatibility = async (
           'You cannot compare your profile with yourself',
       })
     }
+
 
     const [
       currentUser,
@@ -238,7 +251,7 @@ const getCompatibility = async (
   } catch (error) {
     console.error(
       'Compatibility error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({

@@ -22,7 +22,7 @@ const getNotifications = async (req, res) => {
       notifications,
     })
   } catch (error) {
-    console.error('Get notifications error:', error)
+    console.error('Get notifications error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -59,7 +59,7 @@ const markNotificationRead = async (req, res) => {
       notification,
     })
   } catch (error) {
-    console.error('Mark notification read error:', error)
+    console.error('Mark notification read error:', error.message)
 
     return res.status(500).json({
       success: false,

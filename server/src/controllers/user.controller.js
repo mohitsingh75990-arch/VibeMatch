@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const mongoose = require('mongoose')
 const User = require('../models/User')
 const MusicProfile = require('../models/MusicProfile')
 const Block = require('../models/Block')
@@ -40,7 +41,7 @@ const getProfile = async (req, res) => {
       user,
     })
   } catch (error) {
-    console.error('Get profile error:', error)
+    console.error('Get profile error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -51,8 +52,17 @@ const getProfile = async (req, res) => {
 
 const getUserById = async (req, res) => {
   try {
+    const { userId } = req.params
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
+
     const user = await User.findById(
-      req.params.userId,
+      userId,
     ).select('-password')
 
     if (!user) {
@@ -67,7 +77,7 @@ const getUserById = async (req, res) => {
       user,
     })
   } catch (error) {
-    console.error('Get user error:', error)
+    console.error('Get user error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -167,7 +177,7 @@ const updateProfile = async (req, res) => {
   } catch (error) {
     console.error(
       'Update profile error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({
@@ -265,7 +275,7 @@ const uploadProfileImage = async (req, res) => {
       },
     })
   } catch (error) {
-    console.error('Upload profile image error:', error)
+    console.error('Upload profile image error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -301,7 +311,7 @@ const getPreferences = async (
   } catch (error) {
     console.error(
       'Get preferences error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({
@@ -383,7 +393,7 @@ const updatePreferences = async (
   } catch (error) {
     console.error(
       'Update preferences error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({
@@ -847,7 +857,7 @@ const discoverUsers = async (
   } catch (error) {
     console.error(
       'Discover users error:',
-      error,
+      error.message,
     )
 
     return res.status(500).json({

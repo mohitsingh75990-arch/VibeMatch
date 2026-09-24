@@ -1,5 +1,8 @@
+const mongoose = require('mongoose')
 const Report = require('../models/Report')
-const Block = require('../models/Block')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
 
 const reportUser = async (req, res) => {
   try {
@@ -7,10 +10,10 @@ const reportUser = async (req, res) => {
     const { userId: reportedUser } = req.params
     const { reason, details } = req.body
 
-    if (!reportedUser) {
+    if (!isValidObjectId(reportedUser)) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
+        message: 'Invalid user ID',
       })
     }
 
@@ -68,7 +71,7 @@ const reportUser = async (req, res) => {
       },
     })
   } catch (error) {
-    console.error('Report user error:', error)
+    console.error('Report user error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -91,7 +94,7 @@ const getMyReports = async (req, res) => {
       reports,
     })
   } catch (error) {
-    console.error('Get reports error:', error)
+    console.error('Get reports error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -103,4 +106,4 @@ const getMyReports = async (req, res) => {
 module.exports = {
   reportUser,
   getMyReports,
-}
+}

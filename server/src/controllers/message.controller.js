@@ -1,8 +1,13 @@
+const mongoose = require('mongoose')
 const Message = require('../models/Message')
 const Interaction = require('../models/Interaction')
 const Notification = require('../models/Notification')
 const Block = require('../models/Block')
 const { getSocketIO } = require('../services/socket')
+
+const isValidObjectId = (id) =>
+  Boolean(id) && mongoose.Types.ObjectId.isValid(id)
+
 
 const areBlocked = async (userA, userB) => {
   const block = await Block.findOne({
@@ -110,7 +115,7 @@ const sendMessage = async (req, res) => {
       data: populatedMessage,
     })
   } catch (error) {
-    console.error('Send message error:', error)
+    console.error('Send message error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -123,6 +128,13 @@ const getConversation = async (req, res) => {
   try {
     const currentUser = req.user.userId
     const { userId } = req.params
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
 
     const blocked = await areBlocked(currentUser, userId)
 
@@ -165,7 +177,7 @@ const getConversation = async (req, res) => {
       messages,
     })
   } catch (error) {
-    console.error('Get conversation error:', error)
+    console.error('Get conversation error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -178,6 +190,13 @@ const markMessagesDelivered = async (req, res) => {
   try {
     const currentUser = req.user.userId
     const { userId } = req.params
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
 
     const blocked = await areBlocked(currentUser, userId)
 
@@ -233,7 +252,7 @@ const markMessagesDelivered = async (req, res) => {
       updatedCount: result.modifiedCount,
     })
   } catch (error) {
-    console.error('Mark delivered error:', error)
+    console.error('Mark delivered error:', error.message)
 
     return res.status(500).json({
       success: false,
@@ -246,6 +265,13 @@ const markMessagesRead = async (req, res) => {
   try {
     const currentUser = req.user.userId
     const { userId } = req.params
+
+    if (!isValidObjectId(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user ID',
+      })
+    }
 
     const blocked = await areBlocked(currentUser, userId)
 
@@ -302,7 +328,7 @@ const markMessagesRead = async (req, res) => {
       updatedCount: result.modifiedCount,
     })
   } catch (error) {
-    console.error('Mark read error:', error)
+    console.error('Mark read error:', error.message)
 
     return res.status(500).json({
       success: false,
