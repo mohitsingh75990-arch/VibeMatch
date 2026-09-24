@@ -9,9 +9,15 @@ const SOCKET_URL = API_URL.replace(
   '',
 )
 
+const getToken = () => localStorage.getItem('vibematch_token')
+
 const socket = io(SOCKET_URL, {
   autoConnect: false,
   transports: ['websocket', 'polling'],
+  auth: () => {
+    const token = getToken()
+    return token ? { token } : {}
+  },
 })
 
 export default socket

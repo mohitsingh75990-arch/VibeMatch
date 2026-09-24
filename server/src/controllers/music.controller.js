@@ -1,6 +1,12 @@
 const crypto = require('crypto')
 const jwt = require('jsonwebtoken')
 const MusicProfile = require('../models/MusicProfile')
+const {
+  encrypt,
+  decrypt,
+  isEncryptedFormat,
+  migratePlaintextIfNeeded,
+} = require('../utils/tokenEncryption')
 
 const SPOTIFY_SCOPES = 'user-read-private user-top-read'
 
@@ -124,7 +130,7 @@ const getSpotifyAuthUrl = async (req, res) => {
         userId: req.user.userId,
         nonce: crypto.randomBytes(16).toString('hex'),
       },
-      process.env.JWT_SECRET || 'vibematch_jwt_secret',
+      process.env.JWT_SECRET,
       { expiresIn: '15m' },
     )
 
@@ -171,7 +177,7 @@ const spotifyCallback = async (req, res) => {
     try {
       decoded = jwt.verify(
         state,
-        process.env.JWT_SECRET || 'vibematch_jwt_secret',
+        process.env.JWT_SECRET,
       )
     } catch {
       return res.redirect(`${clientUrl}/profile?spotify=invalid_state`)
@@ -256,8 +262,8 @@ const spotifyCallback = async (req, res) => {
         user: userId,
         spotifyConnected: true,
         spotifyId: profileData.id || null,
-        spotifyAccessToken: accessToken,
-        spotifyRefreshToken: refreshToken || undefined,
+        spotifyAccessToken: encrypt(accessToken),
+        spotifyRefreshToken: refreshToken ? encrypt(refreshToken) : undefined,
         spotifyTokenExpiresAt: new Date(Date.now() + expiresIn * 1000),
         topArtists,
         topTracks,
@@ -292,9 +298,11 @@ const syncSpotify = async (req, res) => {
       })
     }
 
-    let accessToken = musicProfile.spotifyAccessToken
+    let accessToken = decrypt(musicProfile.spotifyAccessToken)
     const expiresAt = musicProfile.spotifyTokenExpiresAt
-    const refreshToken = musicProfile.spotifyRefreshToken
+    const refreshToken = decrypt(musicProfile.spotifyRefreshToken)
+
+    let tokenRefreshed = false
 
     // If token is expiring in < 60 seconds and refresh token is present, refresh it
     if (
@@ -325,12 +333,16 @@ const syncSpotify = async (req, res) => {
         if (refreshRes.ok) {
           const refreshed = await refreshRes.json()
           accessToken = refreshed.access_token
-          musicProfile.spotifyAccessToken = accessToken
+          musicProfile.spotifyAccessToken = encrypt(accessToken)
+          if (refreshed.refresh_token) {
+            musicProfile.spotifyRefreshToken = encrypt(refreshed.refresh_token)
+          }
           if (refreshed.expires_in) {
             musicProfile.spotifyTokenExpiresAt = new Date(
               Date.now() + refreshed.expires_in * 1000,
             )
           }
+          tokenRefreshed = true
         }
       }
     }
@@ -382,6 +394,14 @@ const syncSpotify = async (req, res) => {
     }
 
     musicProfile.lastSyncedAt = new Date()
+
+    if (!tokenRefreshed && musicProfile.isModified('spotifyAccessToken')) {
+      musicProfile.spotifyAccessToken = encrypt(decrypt(musicProfile.spotifyAccessToken))
+    }
+    if (!tokenRefreshed && musicProfile.isModified('spotifyRefreshToken') && musicProfile.spotifyRefreshToken) {
+      musicProfile.spotifyRefreshToken = encrypt(decrypt(musicProfile.spotifyRefreshToken))
+    }
+
     await musicProfile.save()
 
     const sanitizedProfile = musicProfile.toObject()

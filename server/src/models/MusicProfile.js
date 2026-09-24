@@ -1,5 +1,23 @@
 const mongoose = require('mongoose')
 
+const encryptedTokenSchema = new mongoose.Schema(
+  {
+    encrypted: {
+      type: String,
+      required: true,
+    },
+    iv: {
+      type: String,
+      required: true,
+    },
+    authTag: {
+      type: String,
+      required: true,
+    },
+  },
+  { _id: false },
+)
+
 const musicProfileSchema = new mongoose.Schema(
   {
     user: {
@@ -20,12 +38,12 @@ const musicProfileSchema = new mongoose.Schema(
     },
 
     spotifyAccessToken: {
-      type: String,
+      type: encryptedTokenSchema,
       select: false,
     },
 
     spotifyRefreshToken: {
-      type: String,
+      type: encryptedTokenSchema,
       select: false,
     },
 

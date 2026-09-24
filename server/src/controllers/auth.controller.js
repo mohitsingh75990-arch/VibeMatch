@@ -237,6 +237,9 @@ const changePassword = async (
         12,
       )
 
+    user.passwordResetToken = undefined
+    user.passwordResetExpires = undefined
+
     await user.save()
 
     return res.status(200).json({
