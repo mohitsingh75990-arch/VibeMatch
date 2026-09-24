@@ -639,9 +639,11 @@ const googleAuth = async (req, res) => {
       )
     }
 
+    // Always use the configured callback URL; fallback to known production URL.
+    // Both googleAuth and googleCallback must use the EXACT same redirect_uri.
     const callbackUrl =
       process.env.GOOGLE_CALLBACK_URL ||
-      `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+      'https://vibematch-lg51.onrender.com/api/auth/google/callback'
 
     const state = jwt.sign(
       {
@@ -722,9 +724,29 @@ const googleCallback = async (req, res) => {
 
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+
+    // Guard: credentials must be present at callback time
+    if (!clientId || !clientSecret) {
+      console.error('[Google OAuth] Token exchange aborted: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not set in environment')
+      return res.redirect(
+        `${clientOrigin}/login?error=${encodeURIComponent(
+          'Google Sign-In is not configured on the server.',
+        )}`,
+      )
+    }
+
+    // Always prefer the explicitly configured callback URL.
+    // DO NOT reconstruct from req.protocol/host — Render's reverse proxy can make
+    // req.protocol unreliable and produce a redirect_uri that doesn't match Google's record.
     const callbackUrl =
       process.env.GOOGLE_CALLBACK_URL ||
-      `${req.protocol}://${req.get('host')}/api/auth/google/callback`
+      'https://vibematch-lg51.onrender.com/api/auth/google/callback'
+
+    // Safe diagnostic log (never logs secret value)
+    console.log('[Google OAuth] Callback received, exchanging code...')
+    console.log('[Google OAuth] client_id present:', !!clientId)
+    console.log('[Google OAuth] client_secret present:', !!clientSecret)
+    console.log('[Google OAuth] redirect_uri for token exchange:', callbackUrl)
 
     // Exchange authorization code for Google access token
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -742,8 +764,16 @@ const googleCallback = async (req, res) => {
     })
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text()
-      console.error('Google token exchange failed:', errorText)
+      const errorData = await tokenResponse.json().catch(() => ({}))
+      // Log the error code/description from Google (safe — never contains user secrets)
+      console.error('[Google OAuth] Token exchange failed:', {
+        status: tokenResponse.status,
+        error: errorData.error,
+        error_description: errorData.error_description,
+        redirect_uri_used: callbackUrl,
+        client_id_present: !!clientId,
+        client_secret_present: !!clientSecret,
+      })
       return res.redirect(
         `${clientOrigin}/login?error=${encodeURIComponent(
           'Failed to exchange authorization code with Google.',
