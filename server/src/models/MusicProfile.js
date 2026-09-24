@@ -19,6 +19,21 @@ const musicProfileSchema = new mongoose.Schema(
       trim: true,
     },
 
+    spotifyAccessToken: {
+      type: String,
+      select: false,
+    },
+
+    spotifyRefreshToken: {
+      type: String,
+      select: false,
+    },
+
+    spotifyTokenExpiresAt: {
+      type: Date,
+      select: false,
+    },
+
     topArtists: {
       type: [String],
       default: [],

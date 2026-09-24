@@ -94,7 +94,13 @@ function ProfileCompletenessBar({ profile, form, musicForm }) {
 }
 
 /* ─── Profile Preview Card ──────────────────────────────────────────────── */
-function ProfilePreviewCard({ profile, form, musicForm, getImageUrl }) {
+function ProfilePreviewCard({
+  profile,
+  form,
+  musicForm,
+  getImageUrl,
+  spotifyConnected,
+}) {
   const photos =
     Array.isArray(profile?.photos) && profile.photos.length > 0
       ? [...profile.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
@@ -174,10 +180,17 @@ function ProfilePreviewCard({ profile, form, musicForm, getImageUrl }) {
           )}
 
           <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent p-4">
-            <h3 className="text-xl font-bold text-white">
-              {form.name || 'Your name'}
-              {form.age ? `, ${form.age}` : ''}
-            </h3>
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-xl font-bold text-white">
+                {form.name || 'Your name'}
+                {form.age ? `, ${form.age}` : ''}
+              </h3>
+              {spotifyConnected && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/30 border border-emerald-400/40 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300 backdrop-blur-xs">
+                  🎧 Spotify
+                </span>
+              )}
+            </div>
             {form.location && (
               <p className="text-xs text-white/80 mt-0.5">
                 📍 {form.location}
@@ -319,6 +332,9 @@ function Profile() {
   const [imagePreview, setImagePreview] = useState('')
   const [imageUploading, setImageUploading] = useState(false)
   const [imageSuccess, setImageSuccess] = useState('')
+  const [musicProfile, setMusicProfile] = useState(null)
+  const [spotifyActionLoading, setSpotifyActionLoading] = useState(false)
+  const [spotifyMessage, setSpotifyMessage] = useState('')
 
   const [preferencesSaving, setPreferencesSaving] =
     useState(false)
@@ -437,6 +453,8 @@ function Profile() {
             preferencesData.showSimilarMusic ?? true,
         })
 
+        setMusicProfile(musicData)
+
         if (data.profileImage) {
           setImagePreview(
             getImageUrl(data.profileImage),
@@ -453,7 +471,104 @@ function Profile() {
     }
 
     fetchProfile()
+
+    const params = new URLSearchParams(window.location.search)
+    const spotifyStatus = params.get('spotify')
+    if (spotifyStatus === 'connected') {
+      setSpotifyMessage(
+        'Spotify account connected and music profile synced successfully! 🎧',
+      )
+    } else if (spotifyStatus === 'denied') {
+      setError('Spotify connection was cancelled or denied.')
+    } else if (spotifyStatus === 'error') {
+      setError('An error occurred while connecting your Spotify account.')
+    }
   }, [])
+
+  const handleConnectSpotify = async () => {
+    try {
+      setSpotifyActionLoading(true)
+      setError('')
+      setSpotifyMessage('')
+
+      const res = await api.get('/music/spotify/login')
+      if (res.data?.configured && res.data?.url) {
+        window.location.href = res.data.url
+      } else {
+        const demoRes = await api.post('/music/spotify/demo-connect')
+        if (demoRes.data?.success) {
+          setMusicProfile(demoRes.data.musicProfile)
+          setSpotifyMessage(
+            'Spotify music library linked! Top artists, tracks & genres synced.',
+          )
+          setForm((prev) => ({
+            ...prev,
+            favoriteArtists:
+              prev.favoriteArtists ||
+              demoRes.data.musicProfile.topArtists?.join(', ') ||
+              '',
+            favoriteGenres:
+              prev.favoriteGenres ||
+              demoRes.data.musicProfile.genres?.join(', ') ||
+              '',
+            vibeTags: Array.from(
+              new Set([
+                ...prev.vibeTags,
+                ...(demoRes.data.musicProfile.vibeTags || []),
+              ]),
+            ),
+          }))
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to connect to Spotify')
+    } finally {
+      setSpotifyActionLoading(false)
+    }
+  }
+
+  const handleSyncSpotify = async () => {
+    try {
+      setSpotifyActionLoading(true)
+      setError('')
+      setSpotifyMessage('')
+
+      const res = await api.post('/music/spotify/sync')
+      if (res.data?.success) {
+        setMusicProfile(res.data.musicProfile)
+        setSpotifyMessage('Spotify music data synced fresh from Spotify! 🎵')
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to sync Spotify data')
+    } finally {
+      setSpotifyActionLoading(false)
+    }
+  }
+
+  const handleDisconnectSpotify = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to disconnect Spotify from your profile?',
+    )
+    if (!confirmed) return
+
+    try {
+      setSpotifyActionLoading(true)
+      setError('')
+      setSpotifyMessage('')
+
+      await api.post('/music/spotify/disconnect')
+      setMusicProfile((prev) => ({
+        ...prev,
+        spotifyConnected: false,
+        spotifyId: null,
+      }))
+      setSpotifyMessage('Spotify account disconnected successfully.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to disconnect Spotify')
+    } finally {
+      setSpotifyActionLoading(false)
+    }
+  }
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -1012,6 +1127,7 @@ function Profile() {
             form={form}
             musicForm={form}
             getImageUrl={getImageUrl}
+            spotifyConnected={musicProfile?.spotifyConnected}
           />
         )}
 
@@ -1594,6 +1710,119 @@ function Profile() {
             <p className="mt-2 text-sm leading-6 text-slate-500">
               Your music taste helps VibeMatch find compatible people.
             </p>
+
+            {/* SPOTIFY INTEGRATION PANEL */}
+            <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent p-4 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400">
+                    <svg className="h-6 w-6 fill-current" viewBox="0 0 24 24">
+                      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.488 17.306c-.217.355-.678.47-1.033.253-2.83-1.728-6.393-2.119-10.589-1.161-.403.092-.806-.157-.899-.56-.092-.403.157-.806.56-.899 4.6-1.05 8.537-.604 11.708 1.334.355.217.47.678.253 1.033zm1.464-3.26c-.273.444-.858.587-1.302.314-3.24-1.992-8.178-2.568-12.01-1.405-.499.151-1.026-.134-1.177-.633-.151-.499.134-1.026.633-1.177 4.385-1.331 9.818-.693 13.542 1.599.444.273.587.858.314 1.302zm.126-3.41c-3.885-2.308-10.29-2.52-13.99-1.396-.596.182-1.23-.162-1.412-.758-.182-.596.162-1.23.758-1.412 4.254-1.292 11.31-1.045 15.79 1.615.536.318.71 1.013.392 1.549-.318.536-1.013.71-1.538.402z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-semibold text-white sm:text-lg">
+                        Spotify Music
+                      </h3>
+                      {musicProfile?.spotifyConnected ? (
+                        <span className="rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 text-xs font-semibold text-emerald-300">
+                          Connected
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-slate-400">
+                          Not Connected
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {musicProfile?.spotifyConnected
+                        ? `Linked${musicProfile.spotifyId ? ` as ${musicProfile.spotifyId}` : ''}${musicProfile.lastSpotifySync ? ` • Synced ${new Date(musicProfile.lastSpotifySync).toLocaleDateString()}` : ''}`
+                        : 'Connect Spotify to sync your top artists, tracks, and music vibe.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {musicProfile?.spotifyConnected ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleSyncSpotify}
+                        disabled={spotifyActionLoading}
+                        className="rounded-xl bg-emerald-500/20 border border-emerald-400/30 px-3.5 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
+                      >
+                        {spotifyActionLoading ? 'Syncing...' : '🔄 Sync Fresh Data'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDisconnectSpotify}
+                        disabled={spotifyActionLoading}
+                        className="rounded-xl bg-white/5 border border-white/10 px-3.5 py-2 text-xs font-medium text-slate-300 transition hover:bg-rose-500/20 hover:border-rose-500/30 hover:text-rose-300 disabled:opacity-50"
+                      >
+                        Disconnect
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleConnectSpotify}
+                      disabled={spotifyActionLoading}
+                      className="rounded-xl bg-[#1DB954] px-4 py-2.5 text-xs font-bold text-black transition hover:bg-[#1ed760] shadow-lg shadow-[#1DB954]/20 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {spotifyActionLoading ? 'Connecting...' : 'Connect Spotify'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {spotifyMessage && (
+                <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+                  {spotifyMessage}
+                </div>
+              )}
+
+              {/* Top highlights if connected */}
+              {musicProfile?.spotifyConnected && (
+                <div className="mt-4 pt-4 border-t border-white/10 grid gap-3 sm:grid-cols-2">
+                  {Array.isArray(musicProfile.topArtists) && musicProfile.topArtists.length > 0 && (
+                    <div className="rounded-xl bg-white/[0.02] p-3 border border-white/5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                        Top Artists
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {musicProfile.topArtists.slice(0, 5).map((artist, idx) => (
+                          <span
+                            key={idx}
+                            className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-slate-300 border border-white/10"
+                          >
+                            {artist}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {Array.isArray(musicProfile.topTracks) && musicProfile.topTracks.length > 0 && (
+                    <div className="rounded-xl bg-white/[0.02] p-3 border border-white/5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                        Top Tracks
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {musicProfile.topTracks.slice(0, 4).map((track, idx) => (
+                          <span
+                            key={idx}
+                            className="rounded-md bg-white/5 px-2 py-0.5 text-xs text-slate-300 border border-white/10"
+                          >
+                            🎵 {track}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="mt-5 space-y-5 sm:mt-6">
               <div>

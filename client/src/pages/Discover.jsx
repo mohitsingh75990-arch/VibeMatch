@@ -922,12 +922,19 @@ function Discover() {
                 {/* USER INFO */}
 
                 <div className="p-4 sm:p-5">
-                  <h2 className="break-words text-xl font-bold text-slate-900 sm:text-2xl">
-                    {user.name}
-                    {user.age
-                      ? `, ${user.age}`
-                      : ''}
-                  </h2>
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="break-words text-xl font-bold text-slate-900 sm:text-2xl">
+                      {user.name}
+                      {user.age
+                        ? `, ${user.age}`
+                        : ''}
+                    </h2>
+                    {user.spotifyConnected && (
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+                        🎧 Spotify
+                      </span>
+                    )}
+                  </div>
 
                   {/* VIBE SCORE */}
 

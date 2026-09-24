@@ -740,6 +740,8 @@ const discoverUsers = async (
 
             vibeTags: userMusic?.vibeTags || [],
 
+            spotifyConnected: Boolean(userMusic?.spotifyConnected),
+
             vibeScore:
               compatibility.score,
 

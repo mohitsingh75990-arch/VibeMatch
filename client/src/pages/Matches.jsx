@@ -742,12 +742,19 @@ function Matches() {
                   {/* USER NAME */}
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h2 className="text-xl font-bold text-slate-900">
-                        {user.name}
-                        {user.age
-                          ? `, ${user.age}`
-                          : ''}
-                      </h2>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-xl font-bold text-slate-900">
+                          {user.name}
+                          {user.age
+                            ? `, ${user.age}`
+                            : ''}
+                        </h2>
+                        {user.spotifyConnected && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            🎧 Spotify
+                          </span>
+                        )}
+                      </div>
 
                       {user.location && (
                         <p className="mt-1 text-sm text-slate-500">
