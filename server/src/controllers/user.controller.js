@@ -23,6 +23,33 @@ const escapeRegex = (string = '') => {
   return String(string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+const normalizePhotos = (user) => {
+  if (user && user.photos && user.photos.length > 0) {
+    return [...user.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+  }
+
+  if (user && user.profileImage) {
+    return [
+      {
+        _id: 'legacy-primary',
+        url: user.profileImage,
+        isPrimary: true,
+        order: 0,
+      },
+    ]
+  }
+
+  return []
+}
+
+const formatUserResponse = (user) => {
+  if (!user) return null
+  const userObj = user.toObject ? user.toObject() : { ...user }
+  userObj.photos = normalizePhotos(user)
+  delete userObj.password
+  return userObj
+}
+
 const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select(
@@ -38,7 +65,7 @@ const getProfile = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      user,
+      user: formatUserResponse(user),
     })
   } catch (error) {
     console.error('Get profile error:', error.message)
@@ -74,7 +101,7 @@ const getUserById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      user,
+      user: formatUserResponse(user),
     })
   } catch (error) {
     console.error('Get user error:', error.message)
@@ -709,6 +736,8 @@ const discoverUsers = async (
           return {
             ...user.toObject(),
 
+            photos: normalizePhotos(user),
+
             vibeScore:
               compatibility.score,
 
@@ -868,6 +897,324 @@ const discoverUsers = async (
   }
 }
 
+/*
+  Upload gallery photo (max 6)
+*/
+const uploadGalleryPhoto = async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select an image',
+      })
+    }
+
+    const user = await User.findById(req.user.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      })
+    }
+
+    if ((!user.photos || user.photos.length === 0) && user.profileImage) {
+      user.photos = [
+        {
+          url: user.profileImage,
+          publicId: '',
+          isPrimary: true,
+          order: 0,
+        },
+      ]
+    }
+
+    if (user.photos && user.photos.length >= 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Maximum 6 photos allowed in gallery',
+      })
+    }
+
+    const isProduction = process.env.NODE_ENV === 'production'
+    const hasCloudinary = isCloudinaryConfigured()
+
+    if (isProduction && !hasCloudinary) {
+      console.error(
+        'Gallery upload error: Cloudinary credentials missing in production environment.',
+      )
+      return res.status(500).json({
+        success: false,
+        message:
+          'Persistent image storage is not configured on the production server. Please configure Cloudinary credentials.',
+      })
+    }
+
+    let imageUrl = ''
+    let publicId = ''
+
+    if (hasCloudinary) {
+      const result = await uploadToCloudinary(req.file.buffer, user._id)
+      imageUrl = result.secure_url
+      publicId = result.public_id || ''
+    } else {
+      if (!fs.existsSync(uploadDirectory)) {
+        fs.mkdirSync(uploadDirectory, { recursive: true })
+      }
+
+      const extension = path.extname(req.file.originalname) || '.jpg'
+      const filename = `gallery-${user._id}-${Date.now()}${extension}`
+      const destination = path.join(uploadDirectory, filename)
+
+      await fs.promises.writeFile(destination, req.file.buffer)
+      imageUrl = `/uploads/${filename}`
+      publicId = `local-${filename}`
+    }
+
+    const isFirst =
+      !user.photos ||
+      user.photos.length === 0 ||
+      !user.photos.some((p) => p.isPrimary)
+
+    const nextOrder = user.photos ? user.photos.length : 0
+
+    const newPhoto = {
+      url: imageUrl,
+      publicId,
+      isPrimary: isFirst,
+      order: nextOrder,
+    }
+
+    if (!user.photos) user.photos = []
+    user.photos.push(newPhoto)
+
+    if (isFirst || !user.profileImage) {
+      user.profileImage = imageUrl
+    }
+
+    await user.save()
+
+    return res.status(200).json({
+      success: true,
+      message: 'Photo added to gallery',
+      photos: normalizePhotos(user),
+      user: formatUserResponse(user),
+    })
+  } catch (error) {
+    console.error('Upload gallery photo error:', error.message)
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to upload photo',
+    })
+  }
+}
+
+/*
+  Delete gallery photo
+*/
+const deleteGalleryPhoto = async (req, res) => {
+  try {
+    const { photoId } = req.params
+    const user = await User.findById(req.user.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      })
+    }
+
+    let photoToDelete = null
+    if (user.photos && user.photos.length > 0) {
+      photoToDelete =
+        user.photos.id(photoId) ||
+        user.photos.find((p) => p._id.toString() === photoId)
+    }
+
+    if (!photoToDelete && photoId === 'legacy-primary' && user.profileImage) {
+      if (user.profileImage.includes('res.cloudinary.com')) {
+        await deleteFromCloudinary(user.profileImage)
+      }
+      user.profileImage = ''
+      user.photos = []
+      await user.save()
+      return res.status(200).json({
+        success: true,
+        message: 'Photo deleted successfully',
+        photos: normalizePhotos(user),
+        user: formatUserResponse(user),
+      })
+    }
+
+    if (!photoToDelete) {
+      return res.status(404).json({
+        success: false,
+        message: 'Photo not found',
+      })
+    }
+
+    const targetIdentifier = photoToDelete.publicId || photoToDelete.url
+    if (targetIdentifier) {
+      await deleteFromCloudinary(targetIdentifier)
+    }
+
+    const wasPrimary = photoToDelete.isPrimary
+    user.photos.pull(photoToDelete._id)
+
+    user.photos.forEach((photo, idx) => {
+      photo.order = idx
+    })
+
+    if (user.photos.length > 0) {
+      if (wasPrimary || !user.photos.some((p) => p.isPrimary)) {
+        user.photos[0].isPrimary = true
+        user.profileImage = user.photos[0].url
+      }
+    } else {
+      user.profileImage = ''
+    }
+
+    await user.save()
+
+    return res.status(200).json({
+      success: true,
+      message: 'Photo deleted successfully',
+      photos: normalizePhotos(user),
+      user: formatUserResponse(user),
+    })
+  } catch (error) {
+    console.error('Delete gallery photo error:', error.message)
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to delete photo',
+    })
+  }
+}
+
+/*
+  Set primary gallery photo
+*/
+const setPrimaryPhoto = async (req, res) => {
+  try {
+    const { photoId } = req.params
+    const user = await User.findById(req.user.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      })
+    }
+
+    if ((!user.photos || user.photos.length === 0) && user.profileImage) {
+      user.photos = [
+        {
+          url: user.profileImage,
+          publicId: '',
+          isPrimary: true,
+          order: 0,
+        },
+      ]
+    }
+
+    const targetPhoto = user.photos
+      ? user.photos.find((p) => p._id.toString() === photoId)
+      : null
+
+    if (!targetPhoto) {
+      return res.status(404).json({
+        success: false,
+        message: 'Photo not found',
+      })
+    }
+
+    user.photos.forEach((p) => {
+      p.isPrimary = p._id.toString() === photoId
+    })
+
+    user.profileImage = targetPhoto.url
+    await user.save()
+
+    return res.status(200).json({
+      success: true,
+      message: 'Primary photo updated',
+      photos: normalizePhotos(user),
+      user: formatUserResponse(user),
+    })
+  } catch (error) {
+    console.error('Set primary photo error:', error.message)
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to update primary photo',
+    })
+  }
+}
+
+/*
+  Reorder gallery photos
+*/
+const reorderGalleryPhotos = async (req, res) => {
+  try {
+    const { photoIds } = req.body
+
+    if (!Array.isArray(photoIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'photoIds array is required',
+      })
+    }
+
+    const user = await User.findById(req.user.userId)
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      })
+    }
+
+    if (user.photos && user.photos.length > 0) {
+      const photoMap = new Map(user.photos.map((p) => [p._id.toString(), p]))
+      const reordered = []
+
+      photoIds.forEach((id, index) => {
+        if (photoMap.has(id)) {
+          const photo = photoMap.get(id)
+          photo.order = index
+          reordered.push(photo)
+          photoMap.delete(id)
+        }
+      })
+
+      photoMap.forEach((photo) => {
+        photo.order = reordered.length
+        reordered.push(photo)
+      })
+
+      user.photos = reordered
+      const primaryPhoto =
+        user.photos.find((p) => p.isPrimary) || user.photos[0]
+      if (primaryPhoto) {
+        user.profileImage = primaryPhoto.url
+      }
+      await user.save()
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Photos reordered successfully',
+      photos: normalizePhotos(user),
+      user: formatUserResponse(user),
+    })
+  } catch (error) {
+    console.error('Reorder gallery photos error:', error.message)
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to reorder photos',
+    })
+  }
+}
+
 module.exports = {
   getProfile,
   getUserById,
@@ -876,4 +1223,8 @@ module.exports = {
   getPreferences,
   updatePreferences,
   discoverUsers,
+  uploadGalleryPhoto,
+  deleteGalleryPhoto,
+  setPrimaryPhoto,
+  reorderGalleryPhotos,
 }

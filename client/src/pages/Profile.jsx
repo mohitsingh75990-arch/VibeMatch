@@ -276,6 +276,164 @@ function Profile() {
     }
   }
 
+  const getNormalizedPhotos = () => {
+    if (profile?.photos && profile.photos.length > 0) {
+      return [...profile.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+    }
+    if (profile?.profileImage) {
+      return [
+        {
+          _id: 'legacy-primary',
+          url: profile.profileImage,
+          isPrimary: true,
+          order: 0,
+        },
+      ]
+    }
+    return []
+  }
+
+  const handleGalleryUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setError('')
+    setImageSuccess('')
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Only JPG, PNG and WebP images are allowed.')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError('Image must be smaller than 5 MB.')
+      event.target.value = ''
+      return
+    }
+
+    try {
+      setImageUploading(true)
+      const formData = new FormData()
+      formData.append('photo', file)
+
+      const response = await api.post('/users/me/photos', formData)
+      const updatedUser = response.data.user
+
+      setProfile(updatedUser)
+      if (updatedUser.profileImage) {
+        setImagePreview(getImageUrl(updatedUser.profileImage))
+        setForm((current) => ({
+          ...current,
+          profileImage: updatedUser.profileImage,
+        }))
+      }
+
+      login({ ...user, ...updatedUser }, token)
+      setImageSuccess('Photo added to gallery successfully.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to upload photo.')
+    } finally {
+      setImageUploading(false)
+      event.target.value = ''
+    }
+  }
+
+  const handleDeleteGalleryPhoto = async (photoId) => {
+    try {
+      setImageUploading(true)
+      setError('')
+      setImageSuccess('')
+
+      const response = await api.delete(`/users/me/photos/${photoId}`)
+      const updatedUser = response.data.user
+
+      setProfile(updatedUser)
+      if (updatedUser.profileImage) {
+        setImagePreview(getImageUrl(updatedUser.profileImage))
+        setForm((current) => ({
+          ...current,
+          profileImage: updatedUser.profileImage,
+        }))
+      } else {
+        setImagePreview('')
+        setForm((current) => ({ ...current, profileImage: '' }))
+      }
+
+      login({ ...user, ...updatedUser }, token)
+      setImageSuccess('Photo deleted successfully.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to delete photo.')
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const handleSetPrimaryPhoto = async (photoId) => {
+    try {
+      setImageUploading(true)
+      setError('')
+      setImageSuccess('')
+
+      const response = await api.put(`/users/me/photos/${photoId}/primary`)
+      const updatedUser = response.data.user
+
+      setProfile(updatedUser)
+      if (updatedUser.profileImage) {
+        setImagePreview(getImageUrl(updatedUser.profileImage))
+        setForm((current) => ({
+          ...current,
+          profileImage: updatedUser.profileImage,
+        }))
+      }
+
+      login({ ...user, ...updatedUser }, token)
+      setImageSuccess('Primary profile photo updated.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to update primary photo.')
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
+  const handleMovePhoto = async (currentIndex, direction) => {
+    const currentPhotos = getNormalizedPhotos()
+    const targetIndex = currentIndex + direction
+    if (targetIndex < 0 || targetIndex >= currentPhotos.length) return
+
+    const swapped = [...currentPhotos]
+    const temp = swapped[currentIndex]
+    swapped[currentIndex] = swapped[targetIndex]
+    swapped[targetIndex] = temp
+
+    const photoIds = swapped.map((p) => p._id)
+
+    try {
+      setImageUploading(true)
+      setError('')
+      setImageSuccess('')
+
+      const response = await api.put('/users/me/photos/reorder', { photoIds })
+      const updatedUser = response.data.user
+
+      setProfile(updatedUser)
+      if (updatedUser.profileImage) {
+        setImagePreview(getImageUrl(updatedUser.profileImage))
+        setForm((current) => ({
+          ...current,
+          profileImage: updatedUser.profileImage,
+        }))
+      }
+
+      login({ ...user, ...updatedUser }, token)
+      setImageSuccess('Photo gallery order updated.')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Unable to reorder photos.')
+    } finally {
+      setImageUploading(false)
+    }
+  }
+
   const handleUploadImage = async () => {
     if (!imageFile) {
       setError('Please select an image first.')
@@ -660,6 +818,146 @@ function Profile() {
                     </p>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* 6-SLOT PHOTO GALLERY MANAGER */}
+            <div className="mt-6 rounded-2xl border border-fuchsia-400/10 bg-fuchsia-500/5 p-4 sm:p-6">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-white sm:text-lg">
+                    Profile Photo Gallery
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Upload up to 6 photos. The primary photo is displayed across VibeMatch.
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto rounded-full bg-fuchsia-500/20 px-3 py-1 text-xs font-semibold text-fuchsia-300 border border-fuchsia-400/30">
+                  {getNormalizedPhotos().length} / 6 Photos
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+                {Array.from({ length: 6 }).map((_, slotIdx) => {
+                  const currentPhotos = getNormalizedPhotos()
+                  const photo = currentPhotos[slotIdx]
+                  const isPrimary =
+                    photo?.isPrimary ||
+                    (slotIdx === 0 &&
+                      photo &&
+                      !currentPhotos.some((p) => p.isPrimary))
+
+                  if (photo) {
+                    const photoUrl = getImageUrl(photo.url)
+                    return (
+                      <div
+                        key={photo._id || slotIdx}
+                        className="group relative h-44 w-full overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-md sm:h-52"
+                      >
+                        <img
+                          src={photoUrl}
+                          alt={`Gallery photo ${slotIdx + 1}`}
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                        />
+
+                        {isPrimary && (
+                          <span className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-full bg-fuchsia-600/90 px-2.5 py-1 text-[11px] font-bold text-white shadow-md backdrop-blur-xs">
+                            ⭐ Primary
+                          </span>
+                        )}
+
+                        <div className="absolute inset-0 z-20 flex flex-col justify-between bg-slate-950/70 p-2 opacity-0 transition duration-200 group-hover:opacity-100">
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGalleryPhoto(photo._id)}
+                              disabled={imageUploading}
+                              className="rounded-xl bg-rose-600/90 px-2.5 py-1 text-xs font-semibold text-white hover:bg-rose-600 transition shadow-sm"
+                              title="Delete photo"
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {!isPrimary && (
+                              <button
+                                type="button"
+                                onClick={() => handleSetPrimaryPhoto(photo._id)}
+                                disabled={imageUploading}
+                                className="w-full rounded-xl bg-fuchsia-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-fuchsia-500 transition shadow-sm"
+                              >
+                                Make Primary
+                              </button>
+                            )}
+
+                            <div className="flex gap-1">
+                              {slotIdx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMovePhoto(slotIdx, -1)}
+                                  disabled={imageUploading}
+                                  className="flex-1 rounded-xl bg-white/20 px-2 py-1 text-[11px] font-medium text-white hover:bg-white/30 transition"
+                                >
+                                  ← Move
+                                </button>
+                              )}
+                              {slotIdx < currentPhotos.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMovePhoto(slotIdx, 1)}
+                                  disabled={imageUploading}
+                                  className="flex-1 rounded-xl bg-white/20 px-2 py-1 text-[11px] font-medium text-white hover:bg-white/30 transition"
+                                >
+                                  Move →
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+
+                  const isNextUploadSlot = slotIdx === currentPhotos.length
+
+                  return (
+                    <div
+                      key={`empty-slot-${slotIdx}`}
+                      className={`relative h-44 w-full rounded-2xl border-2 border-dashed transition sm:h-52 flex flex-col items-center justify-center p-3 text-center ${
+                        isNextUploadSlot
+                          ? 'border-fuchsia-400/40 bg-fuchsia-500/10 hover:bg-fuchsia-500/20 cursor-pointer'
+                          : 'border-white/10 bg-white/[0.02] opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      {isNextUploadSlot ? (
+                        <label className="flex flex-col items-center justify-center h-full w-full cursor-pointer">
+                          <span className="text-3xl text-fuchsia-400 mb-1">+</span>
+                          <span className="text-xs font-semibold text-fuchsia-200">
+                            {imageUploading ? 'Uploading...' : 'Add Photo'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-1">
+                            Slot {slotIdx + 1} of 6
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={handleGalleryUpload}
+                            disabled={imageUploading}
+                            className="hidden"
+                          />
+                        </label>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <span className="text-2xl text-slate-600">📷</span>
+                          <span className="text-xs text-slate-500 mt-1">
+                            Slot {slotIdx + 1}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
 

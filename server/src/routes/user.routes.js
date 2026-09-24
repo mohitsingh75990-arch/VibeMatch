@@ -8,6 +8,10 @@ const {
   getPreferences,
   updatePreferences,
   discoverUsers,
+  uploadGalleryPhoto,
+  deleteGalleryPhoto,
+  setPrimaryPhoto,
+  reorderGalleryPhotos,
 } = require('../controllers/user.controller')
 
 const protect = require('../middleware/auth.middleware')
@@ -41,6 +45,31 @@ router.post(
     'profileImage',
   ),
   uploadProfileImage,
+)
+
+router.post(
+  '/me/photos',
+  protect,
+  uploadProfileImageMiddleware.single('photo'),
+  uploadGalleryPhoto,
+)
+
+router.delete(
+  '/me/photos/:photoId',
+  protect,
+  deleteGalleryPhoto,
+)
+
+router.put(
+  '/me/photos/reorder',
+  protect,
+  reorderGalleryPhotos,
+)
+
+router.put(
+  '/me/photos/:photoId/primary',
+  protect,
+  setPrimaryPhoto,
 )
 
 router.get(

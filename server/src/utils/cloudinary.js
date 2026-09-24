@@ -60,13 +60,9 @@ const uploadToCloudinary = (buffer, userId) => {
   })
 }
 
-const deleteFromCloudinary = async (imageUrl) => {
+const deleteFromCloudinary = async (identifier) => {
   try {
-    if (
-      !imageUrl ||
-      typeof imageUrl !== 'string' ||
-      !imageUrl.includes('res.cloudinary.com')
-    ) {
+    if (!identifier || typeof identifier !== 'string') {
       return null
     }
 
@@ -74,18 +70,22 @@ const deleteFromCloudinary = async (imageUrl) => {
       return null
     }
 
-    // Extract public_id from Cloudinary URL:
-    // Format: https://res.cloudinary.com/<cloud>/image/upload/(v<version>/)?<public_id>.<ext>
-    const regex = /\/image\/upload\/(?:v\d+\/)?([^.]+)/
-    const match = imageUrl.match(regex)
+    let publicId = identifier
 
-    if (match && match[1]) {
-      const publicId = match[1]
-      const result = await cloudinary.uploader.destroy(publicId)
-      return result
+    // Extract public_id if identifier is a full Cloudinary URL:
+    // Format: https://res.cloudinary.com/<cloud>/image/upload/(v<version>/)?<public_id>.<ext>
+    if (identifier.includes('res.cloudinary.com')) {
+      const regex = /\/image\/upload\/(?:v\d+\/)?([^.]+)/
+      const match = identifier.match(regex)
+      if (match && match[1]) {
+        publicId = match[1]
+      } else {
+        return null
+      }
     }
 
-    return null
+    const result = await cloudinary.uploader.destroy(publicId)
+    return result
   } catch (error) {
     // Non-fatal cleanup log, do not throw
     console.error('Cloudinary asset cleanup error:', error.message)

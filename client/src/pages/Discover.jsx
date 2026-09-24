@@ -45,6 +45,103 @@ const VIBE_OPTIONS = [
   'Acoustic',
 ]
 
+function CandidatePhotoCarousel({ user }) {
+  const [photoIdx, setPhotoIdx] = useState(0)
+
+  const photos =
+    Array.isArray(user.photos) && user.photos.length > 0
+      ? [...user.photos].sort((a, b) => (a.order || 0) - (b.order || 0))
+      : user.profileImage
+      ? [{ url: user.profileImage }]
+      : []
+
+  if (photos.length === 0) {
+    return (
+      <div className="flex h-64 items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100 sm:h-72">
+        <span className="text-6xl sm:text-7xl">💜</span>
+      </div>
+    )
+  }
+
+  const currentPhoto = photos[photoIdx] || photos[0]
+  const imageUrl = getImageUrl(currentPhoto?.url)
+
+  const handlePrev = (e) => {
+    e.stopPropagation()
+    setPhotoIdx((prev) => (prev > 0 ? prev - 1 : prev))
+  }
+
+  const handleNext = (e) => {
+    e.stopPropagation()
+    setPhotoIdx((prev) => (prev < photos.length - 1 ? prev + 1 : prev))
+  }
+
+  return (
+    <div className="group relative h-64 w-full overflow-hidden bg-slate-900 sm:h-72 select-none">
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={user.name}
+          className="h-full w-full object-cover transition-all duration-300"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+            event.currentTarget.nextElementSibling?.classList.remove('hidden')
+          }}
+        />
+      ) : null}
+
+      <div
+        className={`flex h-full items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100 ${
+          imageUrl ? 'hidden' : ''
+        }`}
+      >
+        <span className="text-6xl sm:text-7xl">💜</span>
+      </div>
+
+      {photos.length > 1 && (
+        <>
+          {/* Top Bar Indicators */}
+          <div className="absolute top-2 inset-x-2 z-10 flex gap-1 px-1">
+            {photos.map((p, idx) => (
+              <div
+                key={p._id || idx}
+                className={`h-1 flex-1 rounded-full transition-all duration-200 ${
+                  idx === photoIdx
+                    ? 'bg-white shadow-xs'
+                    : 'bg-white/40 backdrop-blur-xs'
+                }`}
+              />
+            ))}
+          </div>
+
+          {/* Navigation Arrows */}
+          {photoIdx > 0 && (
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md opacity-80 hover:opacity-100 hover:scale-105 transition"
+              aria-label="Previous photo"
+            >
+              ‹
+            </button>
+          )}
+
+          {photoIdx < photos.length - 1 && (
+            <button
+              type="button"
+              onClick={handleNext}
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md opacity-80 hover:opacity-100 hover:scale-105 transition"
+              aria-label="Next photo"
+            >
+              ›
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 function Discover() {
   const navigate = useNavigate()
 
@@ -807,10 +904,6 @@ function Discover() {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {users.map((user) => {
-            const imageUrl = getImageUrl(
-              user.profileImage,
-            )
-
             const showSimilarMusic =
               user.compatibilitySettings
                 ?.showSimilarMusic !== false
@@ -823,33 +916,8 @@ function Discover() {
                 key={user._id}
                 className="min-w-0 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 sm:rounded-3xl"
               >
-                {/* PROFILE IMAGE */}
-
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={user.name}
-                    className="h-64 w-full object-cover sm:h-72"
-                    onError={(event) => {
-                      event.currentTarget.style.display =
-                        'none'
-
-                      event.currentTarget.nextElementSibling?.classList.remove(
-                        'hidden',
-                      )
-                    }}
-                  />
-                ) : null}
-
-                <div
-                  className={`flex h-64 items-center justify-center bg-gradient-to-br from-violet-100 to-pink-100 sm:h-72 ${
-                    imageUrl ? 'hidden' : ''
-                  }`}
-                >
-                  <span className="text-6xl sm:text-7xl">
-                    💜
-                  </span>
-                </div>
+                {/* PROFILE GALLERY CAROUSEL */}
+                <CandidatePhotoCarousel user={user} />
 
                 {/* USER INFO */}
 

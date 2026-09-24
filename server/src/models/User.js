@@ -56,6 +56,28 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    photos: [
+      {
+        url: {
+          type: String,
+          required: true,
+          trim: true,
+        },
+        publicId: {
+          type: String,
+          trim: true,
+        },
+        isPrimary: {
+          type: Boolean,
+          default: false,
+        },
+        order: {
+          type: Number,
+          default: 0,
+        },
+      },
+    ],
+
     interests: {
       type: [String],
       default: [],
