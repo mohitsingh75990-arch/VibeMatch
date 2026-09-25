@@ -639,6 +639,11 @@ const resendVerification = async (req, res) => {
   }
 }
 
+const cleanEnvVar = (val) => {
+  if (!val || typeof val !== 'string') return ''
+  return val.trim().replace(/^["']|["']$/g, '').trim()
+}
+
 /*
   Google OAuth: Redirect to Google authorization
 */
@@ -647,8 +652,8 @@ const googleAuth = async (req, res) => {
     process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
 
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+    const clientId = cleanEnvVar(process.env.GOOGLE_CLIENT_ID)
+    const clientSecret = cleanEnvVar(process.env.GOOGLE_CLIENT_SECRET)
 
     if (!clientId || !clientSecret) {
       console.error('Google OAuth credentials are not configured')
@@ -662,7 +667,7 @@ const googleAuth = async (req, res) => {
     // Always use the configured callback URL; fallback to known production URL.
     // Both googleAuth and googleCallback must use the EXACT same redirect_uri.
     const callbackUrl =
-      process.env.GOOGLE_CALLBACK_URL ||
+      cleanEnvVar(process.env.GOOGLE_CALLBACK_URL) ||
       'https://vibematch-lg51.onrender.com/api/auth/google/callback'
 
     const state = jwt.sign(
@@ -742,8 +747,8 @@ const googleCallback = async (req, res) => {
       )
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+    const clientId = cleanEnvVar(process.env.GOOGLE_CLIENT_ID)
+    const clientSecret = cleanEnvVar(process.env.GOOGLE_CLIENT_SECRET)
 
     // Guard: credentials must be present at callback time
     if (!clientId || !clientSecret) {
@@ -759,7 +764,7 @@ const googleCallback = async (req, res) => {
     // DO NOT reconstruct dynamically from proxy headers — Render's reverse proxy can make
     // proxy headers unreliable and produce a redirect_uri that doesn't match Google's record.
     const callbackUrl =
-      process.env.GOOGLE_CALLBACK_URL ||
+      cleanEnvVar(process.env.GOOGLE_CALLBACK_URL) ||
       'https://vibematch-lg51.onrender.com/api/auth/google/callback'
 
     // Safe diagnostic log (never logs secret value)
@@ -769,22 +774,32 @@ const googleCallback = async (req, res) => {
     console.log('[Google OAuth] redirect_uri for token exchange:', callbackUrl)
 
     // Exchange authorization code for Google access token
+    const tokenParams = new URLSearchParams({
+      code: code.trim(),
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: callbackUrl,
+      grant_type: 'authorization_code',
+    })
+
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
       },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: callbackUrl,
-        grant_type: 'authorization_code',
-      }),
+      body: tokenParams.toString(),
     })
 
     if (!tokenResponse.ok) {
-      const errorData = await tokenResponse.json().catch(() => ({}))
+      const rawText = await tokenResponse.text().catch(() => '')
+      let errorData = {}
+      try {
+        errorData = JSON.parse(rawText)
+      } catch {
+        errorData = { error: 'raw_error', error_description: rawText.substring(0, 120) }
+      }
+
       // Log the error code/description from Google (safe — never contains user secrets)
       console.error('[Google OAuth] Token exchange failed:', {
         status: tokenResponse.status,
@@ -794,9 +809,14 @@ const googleCallback = async (req, res) => {
         client_id_present: !!clientId,
         client_secret_present: !!clientSecret,
       })
+
+      const detailMsg = errorData.error_description
+        ? `${errorData.error || 'error'}: ${errorData.error_description}`
+        : errorData.error || `HTTP ${tokenResponse.status}`
+
       return res.redirect(
         `${clientOrigin}/login?error=${encodeURIComponent(
-          'Failed to exchange authorization code with Google.',
+          `Failed to exchange authorization code with Google (${detailMsg}).`,
         )}`,
       )
     }
