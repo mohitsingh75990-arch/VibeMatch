@@ -1,5 +1,12 @@
 const nodemailer = require('nodemailer')
 
+const isResendConfigured = () => {
+  return Boolean(
+    process.env.RESEND_API_KEY ||
+      (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith('re_')),
+  )
+}
+
 const isSmtpConfigured = () => {
   return Boolean(
     process.env.SMTP_HOST &&
@@ -8,119 +15,161 @@ const isSmtpConfigured = () => {
   )
 }
 
-// Do NOT cache the transporter at module level.
-// In production on Render, each new request that sends mail should get a fresh
-// transporter to avoid stale pooled connections being reused after Resend closes them.
-const createTransporter = () => {
+const isEmailConfigured = () => {
+  return isResendConfigured() || isSmtpConfigured()
+}
+
+// Optional local SMTP transporter (fallback for dev or custom SMTP hosts)
+const createSmtpTransporter = () => {
   if (!isSmtpConfigured()) {
     return null
   }
 
   const port = Number(process.env.SMTP_PORT) || 587
-  // port 465 = SSL (secure:true), anything else = STARTTLS (secure:false)
   const secure = port === 465
 
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
     secure,
-    // pool:false (default) — do NOT use persistent pools with cloud SMTP providers
-    // like Resend. Pool connections can be closed server-side and cause ECONNRESET
-    // on reuse without proper detection.
-    connectionTimeout: 15000,  // 15 s — generous for Render cold starts + TLS handshake
-    greetingTimeout: 10000,    // 10 s — time to receive SMTP greeting after connection
-    socketTimeout: 30000,      // 30 s — time for a socket I/O operation
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 30000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Resend SMTP (and most modern providers) do not need requireTLS explicitly;
-    // nodemailer will use STARTTLS on port 587 automatically.
   })
 }
 
+/*
+  sendMail — primary transactional email delivery
+  Production uses Resend HTTPS REST API (https://api.resend.com/emails)
+  to avoid Render Free outbound SMTP port blocking (ports 25, 465, 587).
+*/
 const sendMail = async ({ to, subject, html, text }) => {
   const isProduction = process.env.NODE_ENV === 'production'
+  const resendReady = isResendConfigured()
   const smtpReady = isSmtpConfigured()
 
-  const isResend = Boolean(
-    process.env.SMTP_HOST && process.env.SMTP_HOST.includes('resend'),
-  )
-  const defaultFrom = isResend
-    ? 'VibeMatch <onboarding@resend.dev>'
-    : 'VibeMatch <noreply@vibematch.app>'
-
+  const defaultFrom = 'VibeMatch <onboarding@resend.dev>'
   const from = process.env.EMAIL_FROM || defaultFrom
 
-  // Safe diagnostic log — never logs credentials
+  // Safe diagnostic log — never logs secrets or keys
   console.log('[Mailer] sendMail called:', {
     to,
     from,
     subject,
+    provider: resendReady ? 'Resend HTTPS API' : smtpReady ? 'SMTP' : 'none',
+    resendConfigured: resendReady,
     smtpConfigured: smtpReady,
-    host: process.env.SMTP_HOST || 'NOT SET',
-    port: process.env.SMTP_PORT || '587 (default)',
-    userSet: !!process.env.SMTP_USER,
-    passSet: !!process.env.SMTP_PASS,
     environment: process.env.NODE_ENV || 'undefined',
   })
 
-  if (!smtpReady) {
-    if (isProduction) {
-      console.error(
-        '[Mailer] FATAL: SMTP credentials missing in production — SMTP_HOST, SMTP_USER, SMTP_PASS must all be set in Render environment variables.',
-      )
+  // 1. Primary production delivery: Resend HTTP API over HTTPS (port 443)
+  if (resendReady) {
+    const apiKey =
+      process.env.RESEND_API_KEY ||
+      (process.env.SMTP_PASS?.startsWith('re_') ? process.env.SMTP_PASS : null)
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: Array.isArray(to) ? to : [to],
+        subject,
+        html,
+        text,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error('[Mailer] Resend API send error:', {
+        status: response.status,
+        name: errorData.name || errorData.error,
+        message: errorData.message,
+        to,
+        subject,
+      })
       throw new Error(
-        'Email service is not properly configured on the production server.',
+        `Resend API error (${response.status}): ${errorData.message || response.statusText}`,
       )
-    } else {
-      // Development: mock email — log the full verify URL so developers can test manually
-      console.log(
-        `[Dev Mailer Mock] to=${to} | from=${from} | subject="${subject}" | SMTP not configured locally`,
-      )
-      return { mock: true }
+    }
+
+    const data = await response.json()
+    console.log('[Mailer] Email sent successfully via Resend API:', {
+      id: data.id,
+      to,
+      subject,
+    })
+
+    return { messageId: data.id, ...data }
+  }
+
+  // 2. Optional fallback: SMTP (for local dev or custom SMTP setups)
+  if (smtpReady) {
+    const transporter = createSmtpTransporter()
+
+    try {
+      const info = await transporter.sendMail({
+        from,
+        to,
+        subject,
+        text,
+        html,
+      })
+
+      console.log('[Mailer] Email sent successfully via SMTP:', {
+        messageId: info.messageId,
+        to,
+        subject,
+        accepted: info.accepted,
+        rejected: info.rejected,
+      })
+
+      return info
+    } catch (smtpError) {
+      console.error('[Mailer] SMTP send error:', {
+        code: smtpError.code,
+        command: smtpError.command,
+        responseCode: smtpError.responseCode,
+        response: smtpError.response,
+        message: smtpError.message,
+        to,
+        subject,
+        host: process.env.SMTP_HOST,
+        port: process.env.SMTP_PORT || 587,
+      })
+      throw smtpError
+    } finally {
+      try {
+        transporter.close()
+      } catch {
+        /* noop */
+      }
     }
   }
 
-  const transporter = createTransporter()
-
-  try {
-    const info = await transporter.sendMail({
-      from,
-      to,
-      subject,
-      text,
-      html,
-    })
-
-    console.log('[Mailer] Email sent successfully:', {
-      messageId: info.messageId,
-      to,
-      subject,
-      accepted: info.accepted,
-      rejected: info.rejected,
-    })
-
-    return info
-  } catch (smtpError) {
-    // Log full SMTP error details for Render log inspection (no secrets exposed)
-    console.error('[Mailer] SMTP send error:', {
-      code: smtpError.code,
-      command: smtpError.command,
-      responseCode: smtpError.responseCode,
-      response: smtpError.response,
-      message: smtpError.message,
-      to,
-      subject,
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT || 587,
-    })
-    throw smtpError
-  } finally {
-    // Always close the transporter after sending — avoid lingering connections
-    // on Render's ephemeral environment
-    try { transporter.close() } catch { /* noop */ }
+  // 3. Unconfigured state
+  if (isProduction) {
+    console.error(
+      '[Mailer] FATAL: Email service credentials missing in production. Set RESEND_API_KEY in Render environment variables.',
+    )
+    throw new Error(
+      'Email service is not properly configured on the production server.',
+    )
   }
+
+  // Development mock fallback
+  console.log(
+    `[Dev Mailer Mock] to=${to} | from=${from} | subject="${subject}" | (Email provider not configured locally)`,
+  )
+  return { mock: true }
 }
 
 const sendPasswordResetEmail = async (toEmail, resetUrl) => {
@@ -169,7 +218,10 @@ const sendVerificationEmail = async (toEmail, verifyUrl) => {
 }
 
 module.exports = {
+  isResendConfigured,
   isSmtpConfigured,
+  isEmailConfigured,
+  sendMail,
   sendPasswordResetEmail,
   sendVerificationEmail,
 }
