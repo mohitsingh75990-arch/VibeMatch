@@ -8,69 +8,119 @@ const isSmtpConfigured = () => {
   )
 }
 
-let cachedTransporter = null
-
-const getTransporter = () => {
+// Do NOT cache the transporter at module level.
+// In production on Render, each new request that sends mail should get a fresh
+// transporter to avoid stale pooled connections being reused after Resend closes them.
+const createTransporter = () => {
   if (!isSmtpConfigured()) {
-    cachedTransporter = null
     return null
   }
 
-  if (cachedTransporter) {
-    return cachedTransporter
-  }
-
   const port = Number(process.env.SMTP_PORT) || 587
+  // port 465 = SSL (secure:true), anything else = STARTTLS (secure:false)
   const secure = port === 465
 
-  cachedTransporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port,
     secure,
-    pool: true,
-    connectionTimeout: 5000,
-    socketTimeout: 5000,
+    // pool:false (default) — do NOT use persistent pools with cloud SMTP providers
+    // like Resend. Pool connections can be closed server-side and cause ECONNRESET
+    // on reuse without proper detection.
+    connectionTimeout: 15000,  // 15 s — generous for Render cold starts + TLS handshake
+    greetingTimeout: 10000,    // 10 s — time to receive SMTP greeting after connection
+    socketTimeout: 30000,      // 30 s — time for a socket I/O operation
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    // Resend SMTP (and most modern providers) do not need requireTLS explicitly;
+    // nodemailer will use STARTTLS on port 587 automatically.
   })
-
-  return cachedTransporter
 }
 
 const sendMail = async ({ to, subject, html, text }) => {
   const isProduction = process.env.NODE_ENV === 'production'
-  const transporter = getTransporter()
+  const smtpReady = isSmtpConfigured()
 
-  if (!transporter) {
+  const isResend = Boolean(
+    process.env.SMTP_HOST && process.env.SMTP_HOST.includes('resend'),
+  )
+  const defaultFrom = isResend
+    ? 'VibeMatch <onboarding@resend.dev>'
+    : 'VibeMatch <noreply@vibematch.app>'
+
+  const from = process.env.EMAIL_FROM || defaultFrom
+
+  // Safe diagnostic log — never logs credentials
+  console.log('[Mailer] sendMail called:', {
+    to,
+    from,
+    subject,
+    smtpConfigured: smtpReady,
+    host: process.env.SMTP_HOST || 'NOT SET',
+    port: process.env.SMTP_PORT || '587 (default)',
+    userSet: !!process.env.SMTP_USER,
+    passSet: !!process.env.SMTP_PASS,
+    environment: process.env.NODE_ENV || 'undefined',
+  })
+
+  if (!smtpReady) {
     if (isProduction) {
       console.error(
-        '[Mailer] Email transport error: SMTP credentials missing in production environment.',
+        '[Mailer] FATAL: SMTP credentials missing in production — SMTP_HOST, SMTP_USER, SMTP_PASS must all be set in Render environment variables.',
       )
       throw new Error(
         'Email service is not properly configured on the production server.',
       )
     } else {
+      // Development: mock email — log the full verify URL so developers can test manually
       console.log(
-        `[Dev Mailer Mock] Email to: ${to} | Subject: "${subject}" | (SMTP not configured in local environment)`,
+        `[Dev Mailer Mock] to=${to} | from=${from} | subject="${subject}" | SMTP not configured locally`,
       )
       return { mock: true }
     }
   }
 
-  const from =
-    process.env.EMAIL_FROM || 'VibeMatch <noreply@vibematch.app>'
+  const transporter = createTransporter()
 
-  const info = await transporter.sendMail({
-    from,
-    to,
-    subject,
-    text,
-    html,
-  })
+  try {
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+    })
 
-  return info
+    console.log('[Mailer] Email sent successfully:', {
+      messageId: info.messageId,
+      to,
+      subject,
+      accepted: info.accepted,
+      rejected: info.rejected,
+    })
+
+    return info
+  } catch (smtpError) {
+    // Log full SMTP error details for Render log inspection (no secrets exposed)
+    console.error('[Mailer] SMTP send error:', {
+      code: smtpError.code,
+      command: smtpError.command,
+      responseCode: smtpError.responseCode,
+      response: smtpError.response,
+      message: smtpError.message,
+      to,
+      subject,
+      host: process.env.SMTP_HOST,
+      port: process.env.SMTP_PORT || 587,
+    })
+    throw smtpError
+  } finally {
+    // Always close the transporter after sending — avoid lingering connections
+    // on Render's ephemeral environment
+    try { transporter.close() } catch { /* noop */ }
+  }
 }
 
 const sendPasswordResetEmail = async (toEmail, resetUrl) => {

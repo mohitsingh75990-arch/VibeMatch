@@ -28,4 +28,5 @@ Thumbs.db
 .idea/
 
 # Test runner scripts (offline dev utility)
-server/google_auth_tests.js
+server/google_auth_tests.js
+server/email_tests.js

@@ -71,15 +71,22 @@ const register = async (req, res) => {
     })
 
     const clientOrigin =
-      process.env.CLIENT_URL || 'http://localhost:5173'
+      process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
     const verifyUrl = `${clientOrigin}/verify-email/${rawToken}`
+
+    console.log('[Register] Dispatching verification email:', {
+      to: user.email,
+      clientOrigin,
+      verifyUrlPrefix: verifyUrl.substring(0, 60) + '…',
+    })
 
     // Send verification email asynchronously in background
     sendVerificationEmail(user.email, verifyUrl).catch((mailErr) => {
-      console.error(
-        'Registration verification email delivery error:',
-        mailErr.message,
-      )
+      console.error('[Register] Verification email delivery FAILED:', {
+        code: mailErr.code,
+        message: mailErr.message,
+        to: user.email,
+      })
     })
 
     return res.status(201).json({
@@ -407,15 +414,21 @@ const forgotPassword = async (req, res) => {
     await user.save()
 
     const clientOrigin =
-      process.env.CLIENT_URL || 'http://localhost:5173'
+      process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
     const resetUrl = `${clientOrigin}/reset-password/${rawToken}`
+
+    console.log('[ForgotPassword] Dispatching reset email:', {
+      to: user.email,
+      clientOrigin,
+    })
 
     // Send email asynchronously in background (never block HTTP response on SMTP completion)
     sendPasswordResetEmail(user.email, resetUrl).catch((mailErr) => {
-      console.error(
-        'Forgot password mail delivery error:',
-        mailErr.message,
-      )
+      console.error('[ForgotPassword] Reset email delivery FAILED:', {
+        code: mailErr.code,
+        message: mailErr.message,
+        to: user.email,
+      })
     })
 
     return res.status(200).json(genericResponse)
@@ -597,15 +610,22 @@ const resendVerification = async (req, res) => {
     await user.save()
 
     const clientOrigin =
-      process.env.CLIENT_URL || 'http://localhost:5173'
+      process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
     const verifyUrl = `${clientOrigin}/verify-email/${rawToken}`
+
+    console.log('[ResendVerification] Dispatching verification email:', {
+      to: user.email,
+      clientOrigin,
+      verifyUrlPrefix: verifyUrl.substring(0, 60) + '…',
+    })
 
     // Send verification email asynchronously in background
     sendVerificationEmail(user.email, verifyUrl).catch((mailErr) => {
-      console.error(
-        'Resend verification mail delivery error:',
-        mailErr.message,
-      )
+      console.error('[ResendVerification] Email delivery FAILED:', {
+        code: mailErr.code,
+        message: mailErr.message,
+        to: user.email,
+      })
     })
 
     return res.status(200).json(genericResponse)
@@ -624,7 +644,7 @@ const resendVerification = async (req, res) => {
 */
 const googleAuth = async (req, res) => {
   const clientOrigin =
-    process.env.CLIENT_URL || 'http://localhost:5173'
+    process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
 
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID
@@ -682,7 +702,7 @@ const googleAuth = async (req, res) => {
 */
 const googleCallback = async (req, res) => {
   const clientOrigin =
-    process.env.CLIENT_URL || 'http://localhost:5173'
+    process.env.CLIENT_URL || 'https://vibematch-2-itmk.onrender.com'
 
   try {
     const { code, state, error: oauthError } = req.query
@@ -736,8 +756,8 @@ const googleCallback = async (req, res) => {
     }
 
     // Always prefer the explicitly configured callback URL.
-    // DO NOT reconstruct from req.protocol/host — Render's reverse proxy can make
-    // req.protocol unreliable and produce a redirect_uri that doesn't match Google's record.
+    // DO NOT reconstruct dynamically from proxy headers — Render's reverse proxy can make
+    // proxy headers unreliable and produce a redirect_uri that doesn't match Google's record.
     const callbackUrl =
       process.env.GOOGLE_CALLBACK_URL ||
       'https://vibematch-lg51.onrender.com/api/auth/google/callback'
